@@ -1117,10 +1117,9 @@ body.editor-page-open > footer {
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
         <div>
           <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);font-weight:600;margin-bottom:8px;">ECO List</div>
-          <div style="font-size:13px;color:var(--muted);line-height:1.7;max-width:560px;">ECO codes, opening names, and move lists you can turn into full theory entries.</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.7;max-width:560px;">ECO codes are synced into the main entry list automatically, with grouped variations stored inside each opening page.</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button id="eco-import-btn" class="hbtn primary-btn" type="button" style="font-size:12px;">Import ECO Entries</button>
           <button id="eco-reload-btn" class="hbtn" type="button" style="font-size:12px;">Reload ECO</button>
         </div>
       </div>
@@ -4849,7 +4848,7 @@ function parseEcoEntriesFromHtml(html){
       currentCode = code;
       if(name) currentName = name;
       article = cells[2]?.querySelector('a[href^="/wiki/"]')?.getAttribute('href') || '';
-    } else if(/^(1\.|[A-HKQNRBO0]/i.test(texts[0] || ''))){
+    } else if (/^(1\\.|[A-HKQNRBO0])/i.test(texts[0] || '')) {
       moves = texts[0] || '';
       name = texts[1] || currentName || '';
       article = cells[1]?.querySelector('a[href^="/wiki/"]')?.getAttribute('href') || '';
@@ -4875,6 +4874,8 @@ async function loadEcoEntries(force=false){
 
   if(typeof fetch !== 'function'){
     ECO_CACHE = ECO_FALLBACK.slice();
+    const added = ensureEcoEntries(ECO_CACHE);
+    if(added){ renderView(); if(document.getElementById('home-overlay')?.style.display === 'flex') openHome(); }
     return ECO_CACHE;
   }
 
@@ -4933,7 +4934,7 @@ function renderEcoList(entries, query=''){
     addBtn.className = 'hbtn';
     addBtn.type = 'button';
     addBtn.style.fontSize = '11px';
-    addBtn.textContent = existingIdx >= 0 ? 'Open entry' : 'Create entry';
+    addBtn.textContent = 'Open page';
     addBtn.onclick = ()=>{
       if(existingIdx >= 0){
         closeHome();
@@ -4960,6 +4961,8 @@ async function ensureEcoList(force=false){
   if(status) status.textContent = force ? 'Reloading ECO list…' : 'Loading ECO list…';
   try {
     const entries = await loadEcoEntries(force);
+    const added = ensureEcoEntries(entries);
+    if(added){ renderView(); if(document.getElementById('home-overlay')?.style.display === 'flex') openHome(); }
     renderEcoList(entries, document.getElementById('eco-search')?.value || '');
     const usingFallback = entries.length === ECO_FALLBACK.length && entries.every((entry, idx) => entry.code === ECO_FALLBACK[idx]?.code);
     if(status && usingFallback) status.textContent = 'Loaded fallback ECO entries.';
@@ -5003,17 +5006,16 @@ const homeBtn = document.getElementById('home-btn');
 const contributorsBtn = document.getElementById('contributors-btn');
 const ecoSearch = document.getElementById('eco-search');
 const ecoReloadBtn = document.getElementById('eco-reload-btn');
-const ecoImportBtn = document.getElementById('eco-import-btn');
 
 if(homeBtn) homeBtn.addEventListener('click', openHome);
 if(contributorsBtn) contributorsBtn.addEventListener('click', openContributors);
 if(ecoSearch) ecoSearch.addEventListener('input', ()=>renderEcoList(ECO_CACHE || ECO_FALLBACK, ecoSearch.value));
 if(ecoReloadBtn) ecoReloadBtn.addEventListener('click', ()=>ensureEcoList(true));
-if(ecoImportBtn) ecoImportBtn.addEventListener('click', ()=>importEcoEntries(ECO_CACHE || ECO_FALLBACK, ecoSearch?.value || ''));
 
 // Show homepage on first load
 openHome();
 </script>
 </body>
 </html>
+
 
