@@ -4584,6 +4584,18 @@ renderView();
 
 // ─── Homepage ────────────────────────────────────────────────────────
 const ECO_SOURCE_URL = 'https://en.wikipedia.org/w/api.php?action=parse&page=List_of_ECO_codes&prop=text&formatversion=2&format=json&origin=*';
+const ECO_FALLBACK = [
+  { code:'A00', name:'Irregular openings', moves:'Moves other than 1.e4, 1.d4, 1.Nf3, 1.c4, 1.b3 & 1.f4', articleUrl:'https://en.wikipedia.org/wiki/Irregular_openings' },
+  { code:'A01', name:'Nimzowitsch-Larsen Attack', moves:'1.b3', articleUrl:'https://en.wikipedia.org/wiki/Nimzowitsch-Larsen_Attack' },
+  { code:'A02', name:'Bird Opening', moves:'1.f4', articleUrl:'https://en.wikipedia.org/wiki/Bird_opening' },
+  { code:'A40', name:"Queen's Pawn Game", moves:'1.d4', articleUrl:'https://en.wikipedia.org/wiki/Queen%27s_Pawn_Game' },
+  { code:'B12', name:'Caro-Kann Defense', moves:'1.e4 c6', articleUrl:'https://en.wikipedia.org/wiki/Caro%E2%80%93Kann_Defence' },
+  { code:'B20', name:'Sicilian Defence', moves:'1.e4 c5', articleUrl:'https://en.wikipedia.org/wiki/Sicilian_Defence' },
+  { code:'C20', name:"King's Pawn Game", moves:'1.e4 e5', articleUrl:'https://en.wikipedia.org/wiki/Open_Game' },
+  { code:'C50', name:'Italian Game', moves:'1.e4 e5 2.Nf3 Nc6 3.Bc4', articleUrl:'https://en.wikipedia.org/wiki/Italian_Game' },
+  { code:'C60', name:'Ruy Lopez', moves:'1.e4 e5 2.Nf3 Nc6 3.Bb5', articleUrl:'https://en.wikipedia.org/wiki/Ruy_Lopez' },
+  { code:'D00', name:"Queen's Pawn Game", moves:'1.d4 d5', articleUrl:'https://en.wikipedia.org/wiki/Queen%27s_Pawn_Game' }
+];
 let ECO_CACHE = null;
 let ECO_LOAD_PROMISE = null;
 
@@ -4644,6 +4656,11 @@ async function loadEcoEntries(force=false){
   if(ECO_CACHE && !force) return ECO_CACHE;
   if(ECO_LOAD_PROMISE && !force) return ECO_LOAD_PROMISE;
 
+  if(typeof fetch !== 'function'){
+    ECO_CACHE = ECO_FALLBACK.slice();
+    return ECO_CACHE;
+  }
+
   ECO_LOAD_PROMISE = fetch(ECO_SOURCE_URL)
     .then(res => {
       if(!res.ok) throw new Error('ECO source unavailable');
@@ -4655,6 +4672,10 @@ async function loadEcoEntries(force=false){
       if(!entries.length) throw new Error('No ECO entries found');
       ECO_CACHE = entries;
       return entries;
+    })
+    .catch(() => {
+      ECO_CACHE = ECO_FALLBACK.slice();
+      return ECO_CACHE;
     })
     .finally(() => {
       ECO_LOAD_PROMISE = null;
@@ -4704,8 +4725,12 @@ async function ensureEcoList(force=false){
   try {
     const entries = await loadEcoEntries(force);
     renderEcoList(entries, document.getElementById('eco-search')?.value || '');
+    const usingFallback = entries.length === ECO_FALLBACK.length && entries.every((entry, idx) => entry.code === ECO_FALLBACK[idx]?.code);
+    if(status && usingFallback) status.textContent = 'Loaded fallback ECO entries. Wikipedia import is unavailable right now.';
   } catch(err){
-    if(status) status.textContent = 'Could not load ECO data from Wikipedia right now.';
+    ECO_CACHE = ECO_FALLBACK.slice();
+    renderEcoList(ECO_CACHE, document.getElementById('eco-search')?.value || '');
+    if(status) status.textContent = 'Loaded fallback ECO entries. Wikipedia import is unavailable right now.';
   }
 }
 
@@ -4714,6 +4739,7 @@ function openHome(){
   overlay.style.display = 'flex';
   // Populate entry cards
   const list = document.getElementById('home-entry-list');
+  if(!list) return;
   list.innerHTML = '';
   LINES.forEach((entry, i) => {
     const card = document.createElement('div');
@@ -4737,10 +4763,15 @@ function closeContributors(){
   document.getElementById('contributors-overlay').style.display = 'none';
 }
 
-document.getElementById('home-btn').addEventListener('click', openHome);
-document.getElementById('contributors-btn').addEventListener('click', openContributors);
-document.getElementById('eco-search').addEventListener('input', ()=>renderEcoList(ECO_CACHE || [], document.getElementById('eco-search').value));
-document.getElementById('eco-reload-btn').addEventListener('click', ()=>ensureEcoList(true));
+const homeBtn = document.getElementById('home-btn');
+const contributorsBtn = document.getElementById('contributors-btn');
+const ecoSearch = document.getElementById('eco-search');
+const ecoReloadBtn = document.getElementById('eco-reload-btn');
+
+if(homeBtn) homeBtn.addEventListener('click', openHome);
+if(contributorsBtn) contributorsBtn.addEventListener('click', openContributors);
+if(ecoSearch) ecoSearch.addEventListener('input', ()=>renderEcoList(ECO_CACHE || ECO_FALLBACK, ecoSearch.value));
+if(ecoReloadBtn) ecoReloadBtn.addEventListener('click', ()=>ensureEcoList(true));
 
 // Show homepage on first load
 openHome();
