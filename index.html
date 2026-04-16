@@ -1054,6 +1054,10 @@ body.editor-page-open > footer {
   </button>
 
   <!-- ✅ PLAY BOT BUTTON -->
+  <button class="hbtn" id="brilliant-top-btn">
+    Brilliant Finder
+  </button>
+
   <button class="hbtn" id="play-bot-btn">
     ♟ Play Bot
   </button>
@@ -1996,7 +2000,7 @@ function uciFromMoveResult(res){
   return res.from + res.to + (res.promotion || '');
 }
 
-function analyzeFenPromise(fen, turn, depth = 18){
+function analyzeFenPromise(fen, turn, depth = 18, options = {}){
   return new Promise(resolve => {
     let settled = false;
     const finish = payload => {
@@ -2004,7 +2008,8 @@ function analyzeFenPromise(fen, turn, depth = 18){
       settled = true;
       resolve(payload || null);
     };
-    const timer = setTimeout(() => finish(null), 9000);
+    const targetDepth = Math.max(8, Number(depth) || 18);
+    const timer = setTimeout(() => finish(null), Math.max(9000, targetDepth * 650));
     try {
       requestEval(
         fen,
@@ -2014,7 +2019,8 @@ function analyzeFenPromise(fen, turn, depth = 18){
           finish(payload);
         },
         () => {},
-        depth
+        targetDepth,
+        options || {}
       );
     } catch(_) {
       clearTimeout(timer);
@@ -2023,66 +2029,227 @@ function analyzeFenPromise(fen, turn, depth = 18){
   });
 }
 
-async function findBrilliantMovesFromPly(moves, startPly, onProgress){
-  const built = buildStatesFromMoves(moves || []);
-  const states = built.states || [];
-  const findings = [];
-  if(states.length < 2) return findings;
+const BRILLIANT_SCAN_DEPTH = 14;
+const BRILLIANT_CONFIRM_DEPTH = 18;
+const BRILLIANT_REPLY_DEPTH = 14;
+const BRILLIANT_ENGINE_LINE_PLIES = 8;
+const BRILLIANT_NEAR_BEST_CP = 35;
+const BRILLIANT_STABILITY_CP = 70;
+const BRILLIANT_REPLY_DROP_CP = 110;
+const BRILLIANT_ALREADY_WINNING_CP = 500;
+const BRILLIANT_MAX_RESULTS = 8;
 
-  const begin = Math.max(1, Math.min(Number(startPly) || 1, states.length - 1));
-  for(let ply = begin; ply < states.length; ply++){
-    if(typeof onProgress === 'function') onProgress(ply, states.length - 1);
-    const before = states[ply - 1];
-    const after = states[ply];
-    const moveMeta = moves[ply - 1] || {};
-    const game = cloneGameFromFen(before.fen);
-    if(!game) continue;
-    const mover = before.turn;
-    let res = null;
-    try {
-      res = game.move(moveMeta.san, { sloppy:true });
-    } catch(_) {}
+function scoreForMover(cp, mover){
+  if(cp == null) return null;
+  return mover === 'w' ? cp : -cp;
+}
+
+function formatBrilliantScore(cp){
+  if(cp == null) return 'n/a';
+  if(Math.abs(cp) >= 99999) return cp > 0 ? '+M' : '-M';
+  const pawns = (cp / 100).toFixed(2);
+  return (cp > 0 ? '+' : '') + pawns;
+}
+
+function formatBrilliantGap(cp){
+  if(cp == null) return 'n/a';
+  return (Math.abs(cp) / 100).toFixed(2);
+}
+
+function moveSpecFromVerbose(move){
+  return {
+    from: move.from,
+    to: move.to,
+    promotion: move.promotion || undefined
+  };
+}
+
+function materialSwingForMove(beforeBoard, afterBoard, mover){
+  return materialForColor(beforeBoard, mover) - materialForColor(afterBoard, mover);
+}
+
+function brilliantReasonFromSacrifice(sacValue){
+  if(sacValue >= 9) return 'Queen sacrifice';
+  if(sacValue >= 5) return 'Rook sacrifice';
+  if(sacValue >= 3) return 'Piece sacrifice';
+  return 'Material investment';
+}
+
+async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, frontierIndex){
+  const rootGame = cloneGameFromFen(start.fen);
+  if(!rootGame) return [];
+
+  const mover = start.turn;
+  const rootScore = scoreForMover(payloadToCp(rootEval), mover);
+  const legalMoves = rootGame.moves({ verbose:true }) || [];
+  if(!legalMoves.length) return [];
+
+  const candidates = [];
+  let bestScore = -Infinity;
+
+  for(let i = 0; i < legalMoves.length; i++){
+    const move = legalMoves[i];
+    if(typeof onProgress === 'function') onProgress({
+      stage:'moves',
+      frontierIndex,
+      current:i + 1,
+      total:legalMoves.length,
+      san:move.san,
+      path:start.path || []
+    });
+
+    const nextGame = cloneGameFromFen(start.fen);
+    if(!nextGame) continue;
+    const res = nextGame.move(moveSpecFromVerbose(move));
     if(!res) continue;
 
-    const beforeEval = await analyzeFenPromise(before.fen, before.turn, 18);
-    const afterEval = await analyzeFenPromise(after.fen, after.turn, 18);
-    if(!beforeEval || !afterEval) continue;
+    const shallowEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_SCAN_DEPTH, { forceFresh:true });
+    const deepEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_CONFIRM_DEPTH, { forceFresh:true });
+    const shallowScore = scoreForMover(payloadToCp(shallowEval), mover);
+    const deepScore = scoreForMover(payloadToCp(deepEval), mover);
+    if(deepScore == null) continue;
 
-    const bestMove = Array.isArray(beforeEval.pv) ? beforeEval.pv[0] : '';
-    const playedUci = uciFromMoveResult(res);
-    const isBest = !!bestMove && playedUci === bestMove;
-    if(!isBest) continue;
+    const afterBoard = boardFromChessJs(nextGame);
+    const sacValue = materialSwingForMove(start.board, afterBoard, mover);
+    bestScore = Math.max(bestScore, deepScore);
 
-    const beforeCp = payloadToCp(beforeEval);
-    const afterCp = payloadToCp(afterEval);
-    if(beforeCp == null || afterCp == null) continue;
+    candidates.push({
+      san: res.san,
+      uci: uciFromMoveResult(res),
+      sacValue,
+      shallowScore,
+      deepScore,
+      stability: (shallowScore == null || deepScore == null) ? null : Math.abs(deepScore - shallowScore),
+      pvSan: pvToSan(nextGame.fen(), deepEval?.pv || [], 8),
+      afterFen: nextGame.fen(),
+      reason: brilliantReasonFromSacrifice(sacValue)
+    });
+  }
 
-    const materialBefore = materialForColor(before.board, mover);
-    const materialAfter = materialForColor(after.board, mover);
-    const sacValue = materialBefore - materialAfter;
-    const keepsEval = mover === 'w' ? afterCp >= beforeCp - 35 : afterCp <= beforeCp + 35;
-    const notAlreadyCrushing = Math.abs(beforeCp) <= 500;
-    const improvesOrHolds = mover === 'w' ? afterCp >= beforeCp - 15 : afterCp <= beforeCp + 15;
+  if(!Number.isFinite(bestScore)) return [];
 
-    if(sacValue >= 1 && keepsEval && notAlreadyCrushing && improvesOrHolds){
+  const shortlist = candidates
+    .filter(candidate => candidate.sacValue >= 1)
+    .filter(candidate => bestScore - candidate.deepScore <= BRILLIANT_NEAR_BEST_CP)
+    .sort((a, b) => (b.sacValue - a.sacValue) || (b.deepScore - a.deepScore) || a.san.localeCompare(b.san))
+    .slice(0, BRILLIANT_MAX_RESULTS * 2);
+
+  const findings = [];
+
+  for(let i = 0; i < shortlist.length; i++){
+    const candidate = shortlist[i];
+    const replyGame = cloneGameFromFen(candidate.afterFen);
+    if(!replyGame) continue;
+    const replies = replyGame.moves({ verbose:true }) || [];
+
+    let worstReplyScore = candidate.deepScore;
+    let worstReplySan = '';
+
+    for(let j = 0; j < replies.length; j++){
+      const reply = replies[j];
+      if(typeof onProgress === 'function') onProgress({
+        stage:'replies',
+        frontierIndex,
+        current:j + 1,
+        total:replies.length,
+        san:candidate.san,
+        reply:reply.san,
+        candidateIndex:i + 1,
+        candidateTotal:shortlist.length,
+        path:start.path || []
+      });
+
+      const replyState = cloneGameFromFen(candidate.afterFen);
+      if(!replyState) continue;
+      const replyRes = replyState.move(moveSpecFromVerbose(reply));
+      if(!replyRes) continue;
+
+      const replyEval = await analyzeFenPromise(replyState.fen(), replyState.turn(), BRILLIANT_REPLY_DEPTH, { forceFresh:true });
+      const replyScore = scoreForMover(payloadToCp(replyEval), mover);
+      if(replyScore == null) continue;
+      if(replyScore < worstReplyScore){
+        worstReplyScore = replyScore;
+        worstReplySan = replyRes.san;
+      }
+    }
+
+    const notAlreadyWinning = rootScore == null ? true : rootScore < BRILLIANT_ALREADY_WINNING_CP;
+    const stableEnough = candidate.stability == null || candidate.stability <= BRILLIANT_STABILITY_CP;
+    const replyHolds = worstReplyScore >= candidate.deepScore - BRILLIANT_REPLY_DROP_CP;
+
+    if(notAlreadyWinning && stableEnough && replyHolds){
       findings.push({
-        ply,
-        moveNumber: Math.ceil(ply / 2),
-        side: mover,
-        san: moveMeta.san || after.san || '',
-        playedUci,
-        bestMove,
-        beforeCp,
-        afterCp,
-        sacValue,
-        reason: sacValue >= 3 ? 'Piece sacrifice' : 'Material investment'
+        path: (start.path || []).slice(),
+        pathPly: frontierIndex,
+        san: candidate.san,
+        uci: candidate.uci,
+        sacValue: candidate.sacValue,
+        score: candidate.deepScore,
+        rootScore,
+        bestGap: bestScore - candidate.deepScore,
+        worstReplySan,
+        worstReplyScore,
+        stability: candidate.stability,
+        pvSan: candidate.pvSan,
+        reason: candidate.reason
       });
     }
   }
+
   return findings;
 }
 
-function openBrilliantMoveFinder(moves, label){
+async function findBrilliantMovesFromPosition(moves, onProgress){
+  const built = buildStatesFromMoves(moves || []);
+  const states = built.states || [];
+  const start = states[states.length - 1];
+  if(!start?.fen) return [];
+
+  let frontierGame = cloneGameFromFen(start.fen);
+  if(!frontierGame) return [];
+
+  const findings = [];
+  const enginePath = [];
+
+  for(let frontierIndex = 0; frontierIndex < BRILLIANT_ENGINE_LINE_PLIES; frontierIndex++){
+    const frontierFen = frontierGame.fen();
+    const frontierTurn = frontierGame.turn();
+    const frontierBoard = boardFromChessJs(frontierGame);
+
+    if(typeof onProgress === 'function') onProgress({
+      stage:'frontier',
+      frontierIndex,
+      total:BRILLIANT_ENGINE_LINE_PLIES,
+      path:enginePath.slice()
+    });
+
+    const rootEval = await analyzeFenPromise(frontierFen, frontierTurn, BRILLIANT_CONFIRM_DEPTH, { forceFresh:true });
+    if(!rootEval) break;
+
+    const positionFindings = await findBrilliantCandidatesAtPosition({
+      fen: frontierFen,
+      turn: frontierTurn,
+      board: frontierBoard,
+      path: enginePath.slice()
+    }, rootEval, onProgress, frontierIndex);
+    findings.push(...positionFindings);
+
+    const nextUci = Array.isArray(rootEval.pv) ? rootEval.pv[0] : '';
+    if(!nextUci) break;
+
+    const applied = applyUciMove(frontierGame, nextUci);
+    if(!applied?.san) break;
+    enginePath.push(applied.san);
+
+    if(frontierGame.game_over && frontierGame.game_over()) break;
+  }
+
+  return findings
+    .sort((a, b) => (a.pathPly - b.pathPly) || (a.bestGap - b.bestGap) || (b.sacValue - a.sacValue) || (b.score - a.score))
+    .slice(0, BRILLIANT_MAX_RESULTS);
+}
+
+function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
   const existing = document.getElementById('brilliant-finder-overlay');
   if(existing) existing.remove();
 
@@ -2091,87 +2258,172 @@ function openBrilliantMoveFinder(moves, label){
   overlay.className = 'practice-overlay';
 
   const card = document.createElement('div');
-  card.className = 'practice-card';
-  card.style.maxWidth = '860px';
-  card.style.width = 'min(860px, 100%)';
-
-  const wrap = document.createElement('div');
-  wrap.className = 'practice-setup';
-  wrap.style.width = '100%';
+  card.className = 'practice-card practice-room';
+  card.style.width = 'min(1200px, 100%)';
 
   const head = document.createElement('div');
-  head.className = 'practice-head';
-  head.innerHTML = `<div><div class="practice-title">Brilliant Move Finder</div><div class="practice-sub">Choose the move number to start scanning from for <strong>${esc(label || 'this line')}</strong>. The finder checks the played moves from that point forward and flags strong sacrifice-based candidates that remain engine-best.</div></div>`;
+  head.className = 'practice-room-head';
+  const copy = document.createElement('div');
+  copy.className = 'practice-room-copy';
+  copy.innerHTML = `<div class="practice-room-title">Brilliant Move Finder</div><div class="practice-room-sub">Build a starting position for <strong>${esc(label)}</strong>, then scan every legal move from that position. If the current position has no candidate, the finder keeps following the engine line and re-checks later positions instead of stopping early.</div>`;
   const closeBtn = document.createElement('button');
   closeBtn.className = 'hbtn practice-close';
   closeBtn.type = 'button';
   closeBtn.textContent = 'Close';
   closeBtn.onclick = () => overlay.remove();
+  head.appendChild(copy);
   head.appendChild(closeBtn);
-  wrap.appendChild(head);
+  card.appendChild(head);
 
+  const block = {
+    moves: (initialMoves || []).map(move => ({ san: move.san, comment: move.comment || '' }))
+  };
+
+  const editor = document.createElement('div');
+  editor.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
   const field = document.createElement('div');
   field.className = 'ed-field';
-  field.innerHTML = '<label class="ed-label">Start move number</label>';
-  const input = document.createElement('input');
-  input.className = 'ed-input';
-  input.type = 'number';
-  input.min = '1';
-  input.max = String(Math.max(1, Math.ceil((moves || []).length / 2)));
-  input.value = '1';
-  field.appendChild(input);
-  const hint = document.createElement('div');
-  hint.className = 'practice-strength-hint';
-  hint.textContent = 'Example: entering 8 begins checking from move 8 onward. The scan only reviews moves that already exist in the line.';
-  field.appendChild(hint);
-  wrap.appendChild(field);
+  field.innerHTML = '<label class="ed-label">Moves to starting position</label>';
+  const lineRow = document.createElement('div');
+  lineRow.className = 'editor-line-row';
+  const sanBox = document.createElement('input');
+  sanBox.className = 'ed-input ed-mono';
+  sanBox.placeholder = 'Leave blank for the initial position, or enter SAN moves like e4 e5 Nf3 Nc6';
+  sanBox.value = (block.moves || []).map(move => move.san).filter(Boolean).join(' ');
+  lineRow.appendChild(sanBox);
+
+  const engineBox = document.createElement('div');
+  engineBox.className = 'engine-line-box';
+  const engineLabel = document.createElement('div');
+  engineLabel.className = 'engine-line-label';
+  engineLabel.textContent = 'Engine line';
+  const engineValue = document.createElement('div');
+  engineValue.className = 'engine-line-value empty';
+  engineValue.textContent = 'Build a starting position to preview the engine line.';
+  engineBox.appendChild(engineLabel);
+  engineBox.appendChild(engineValue);
+  lineRow.appendChild(engineBox);
+  field.appendChild(lineRow);
+  const fieldHint = document.createElement('div');
+  fieldHint.className = 'practice-strength-hint';
+  fieldHint.textContent = 'You can enter moves in the text box or use the board below. The scan starts from the final position you build.';
+  field.appendChild(fieldHint);
+  editor.appendChild(field);
+
+  const boardHost = document.createElement('div');
+  editor.appendChild(boardHost);
+
+  function updateEngineLine(payload, fen){
+    const line = pvToSan(fen, payload?.pv || []);
+    engineValue.textContent = line || 'No principal variation yet.';
+    engineValue.classList.toggle('empty', !line);
+  }
+
+  function renderBoardInput(){
+    boardHost.innerHTML = '';
+    boardHost.appendChild(buildEditorBoardInput(block, sanBox, ()=>{}, updateEngineLine));
+  }
+
+  sanBox.addEventListener('input', e => {
+    const tokens = e.target.value.trim().split(/\s+/).filter(Boolean);
+    block.moves = tokens.map(san => ({ san, comment:'' }));
+    engineValue.textContent = tokens.length ? 'Updating engine line...' : 'Build a starting position to preview the engine line.';
+    engineValue.classList.toggle('empty', true);
+    renderBoardInput();
+  });
+
+  renderBoardInput();
+  card.appendChild(editor);
 
   const actions = document.createElement('div');
   actions.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;';
   const runBtn = document.createElement('button');
   runBtn.className = 'hbtn primary-btn';
   runBtn.type = 'button';
-  runBtn.textContent = 'Analyze';
+  runBtn.textContent = 'Find in engine lines';
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'hbtn';
+  resetBtn.type = 'button';
+  resetBtn.textContent = 'Reset position';
+  resetBtn.onclick = () => {
+    block.moves = [];
+    sanBox.value = '';
+    engineValue.textContent = 'Build a starting position to preview the engine line.';
+    engineValue.classList.add('empty');
+    renderBoardInput();
+  };
   actions.appendChild(runBtn);
-  wrap.appendChild(actions);
+  actions.appendChild(resetBtn);
+  card.appendChild(actions);
 
   const status = document.createElement('div');
   status.className = 'practice-status';
-  status.textContent = 'Ready to scan.';
-  wrap.appendChild(status);
+  status.textContent = 'Ready to scan this starting position.';
+  card.appendChild(status);
 
   const results = document.createElement('div');
   results.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
-  wrap.appendChild(results);
+  const resultsTitle = document.createElement('div');
+  resultsTitle.className = 'engine-line-label';
+  resultsTitle.textContent = 'Brilliant moves found';
+  resultsTitle.style.display = 'none';
+  results.appendChild(resultsTitle);
+  card.appendChild(results);
 
   runBtn.onclick = async () => {
     runBtn.disabled = true;
     results.innerHTML = '';
-    const startMove = Math.max(1, Number(input.value) || 1);
-    const startPly = Math.max(1, (startMove - 1) * 2 + 1);
-    status.textContent = 'Scanning with Stockfish...';
+    results.appendChild(resultsTitle);
+    resultsTitle.style.display = 'none';
+    status.textContent = 'Analyzing start position...';
     status.className = 'practice-status';
     try {
-      const findings = await findBrilliantMovesFromPly(moves || [], startPly, (ply, maxPly) => {
-        status.textContent = `Scanning ply ${ply} of ${maxPly}...`;
+      const baseMoves = (block.moves || []).map(move => move.san).filter(Boolean);
+      const findings = await findBrilliantMovesFromPosition(block.moves || [], progress => {
+        if(progress.stage === 'frontier') {
+          const prefix = (progress.path || []).length ? ` after ${progress.path.join(' ')}` : '';
+          status.textContent = `Following engine line ply ${progress.frontierIndex + 1} of ${progress.total}${prefix}`;
+          return;
+        }
+        if(progress.stage === 'moves') {
+          status.textContent = `Checking legal move ${progress.current} of ${progress.total}: ${progress.san}`;
+          return;
+        }
+        if(progress.stage === 'replies') {
+          status.textContent = `Checking replies for ${progress.san} (${progress.current}/${progress.total})`;
+        }
       });
       if(!findings.length){
-        status.textContent = 'No brilliant-move candidates were found from that starting position with the current rules.';
+        status.textContent = 'No brilliant-move candidates were found in the scanned engine-line positions from this start.';
         status.className = 'practice-status';
       } else {
-        status.textContent = `Found ${findings.length} brilliant-move candidate${findings.length === 1 ? '' : 's'}.`;
+        status.textContent = `Found ${findings.length} brilliant-move candidate${findings.length === 1 ? '' : 's'} in the scanned engine lines.`;
         status.className = 'practice-status ok';
+        resultsTitle.style.display = 'block';
         findings.forEach(item => {
           const box = document.createElement('div');
           box.className = 'engine-line-box';
-          const moveLabel = `${item.moveNumber}${item.side === 'w' ? '. ' : '... '}${item.san}`;
-          const before = (item.beforeCp / 100).toFixed(2);
-          const after = (item.afterCp / 100).toFixed(2);
-          box.innerHTML = `<div class="engine-line-label">${moveLabel}</div><div class="engine-line-value">${item.reason} • best move confirmed • eval ${before} → ${after} • sac value ${item.sacValue}</div>`;
+          const prefix = item.path && item.path.length ? `After ${item.path.join(' ')} -> ` : '';
+          const replyText = item.worstReplySan ? `${item.worstReplySan} keeps the eval at ${formatBrilliantScore(item.worstReplyScore)}` : 'No legal reply improves the defense';
+          const pvText = item.pvSan ? ` PV: ${item.pvSan}` : '';
+          const fullLine = [...baseMoves, ...(item.path || []), item.san].filter(Boolean).join(' ');
+          box.innerHTML = `<div class="engine-line-label">${esc(prefix + item.san)} | ${esc(item.reason)}</div><div class="engine-line-value">Eval ${formatBrilliantScore(item.score)} | best-gap ${formatBrilliantGap(item.bestGap)} | sacrifice value ${item.sacValue} | ${esc(replyText)}${esc(pvText)}</div>`;
+          const movesLabel = document.createElement('div');
+          movesLabel.className = 'engine-line-label';
+          movesLabel.style.marginTop = '8px';
+          movesLabel.textContent = 'Moves to reach this brilliant move';
+          const movesBox = document.createElement('textarea');
+          movesBox.className = 'ed-textarea ed-mono';
+          movesBox.readOnly = true;
+          movesBox.value = fullLine;
+          movesBox.style.minHeight = '76px';
+          movesBox.style.resize = 'vertical';
+          box.appendChild(movesLabel);
+          box.appendChild(movesBox);
           results.appendChild(box);
         });
       }
-    } catch(err) {
+    } catch(_) {
       status.textContent = 'The brilliant move finder could not finish this scan.';
       status.className = 'practice-status err';
     } finally {
@@ -2179,7 +2431,6 @@ function openBrilliantMoveFinder(moves, label){
     }
   };
 
-  card.appendChild(wrap);
   overlay.appendChild(card);
   overlay.addEventListener('click', ev => { if(ev.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
@@ -3345,11 +3596,21 @@ function beginTimedSearch(job){
   ENGINE.worker.postMessage('stop');
   configureEngineForJob(job);
   ENGINE.worker.postMessage('position fen ' + job.fen);
-  ENGINE.worker.postMessage('go movetime ' + (job.thinkMs || ENGINE_SEARCH_MS));
+
+  const wantsDepth = job.kind === 'eval' && Number(job.depth) > 0;
+  if(wantsDepth){
+    ENGINE.worker.postMessage('go depth ' + Math.max(1, Math.min(40, Math.round(job.depth))));
+  } else {
+    ENGINE.worker.postMessage('go movetime ' + (job.thinkMs || ENGINE_SEARCH_MS));
+  }
+
+  const timeoutMs = wantsDepth
+    ? Math.max(ENGINE_HARD_TIMEOUT_MS, 1600 + (Math.max(1, Number(job.depth) || 1) * 650))
+    : Math.max(ENGINE_HARD_TIMEOUT_MS, (job.thinkMs || ENGINE_SEARCH_MS) + 1200);
 
   ENGINE.searchTimer = setTimeout(() => {
     finishCurrentSearch(ENGINE.mode === 'asm' ? 'saved (fallback)' : 'saved');
-  }, Math.max(ENGINE_HARD_TIMEOUT_MS, (job.thinkMs || ENGINE_SEARCH_MS) + 1200));
+  }, timeoutMs);
 }
 
 function handleEngineMsg(line){
@@ -3456,8 +3717,13 @@ function flushEngineQueue(){
   beginTimedSearch(job);
 }
 
-function requestEval(fen, turn, onEval, onStatus, depth=18){
-  if(ENGINE.cache.has(fen)){
+function requestEval(fen, turn, onEval, onStatus, depth=18, options={}){
+  const cfg = typeof depth === 'object' ? depth : { ...(options || {}), depth };
+  const targetDepth = Math.max(8, Number(cfg.depth) || 18);
+  const forceFresh = !!cfg.forceFresh;
+  const thinkMs = Math.max(400, Number(cfg.thinkMs) || ENGINE_SEARCH_MS);
+
+  if(!forceFresh && ENGINE.cache.has(fen)){
     onEval(cloneEvalPayload(ENGINE.cache.get(fen)));
     onStatus(ENGINE.mode === 'asm' ? 'cached (fallback)' : 'cached');
     return;
@@ -3466,7 +3732,7 @@ function requestEval(fen, turn, onEval, onStatus, depth=18){
   initEngine();
 
   ENGINE.queue = ENGINE.queue.filter(job => !(job.kind === 'eval' && job.fen === fen));
-  const job = { id: ++ENGINE.latestJob, kind:'eval', fen, turn, onEval, onStatus, depth, thinkMs: ENGINE_SEARCH_MS };
+  const job = { id: ++ENGINE.latestJob, kind:'eval', fen, turn, onEval, onStatus, depth: targetDepth, thinkMs, forceFresh };
   ENGINE.queue.push(job);
 
   if(!ENGINE.uciOk || !ENGINE.ready){
@@ -3946,7 +4212,6 @@ function buildBlocks(blocks, container, entry){
       if(block.popularity){const pct=parseInt(block.popularity);const pw=document.createElement('div');pw.className='pop-wrap';pw.innerHTML=`<div class="pop-bar"><div class="pop-fill" style="width:${pct}%"></div></div><span class="pop-pct">${block.popularity}</span>`;hdr.appendChild(pw);}
       const actionGroup=document.createElement('div');actionGroup.className='line-action-group';
       const practiceBtn=document.createElement('button');practiceBtn.className='hbtn';practiceBtn.type='button';practiceBtn.textContent='Practice';practiceBtn.onclick=()=>openPracticeSetup(block.moves||[], block.label||'Line');actionGroup.appendChild(practiceBtn);
-      const brilliantBtn=document.createElement('button');brilliantBtn.className='hbtn';brilliantBtn.type='button';brilliantBtn.textContent='Brilliant Move Finder';brilliantBtn.onclick=()=>openBrilliantMoveFinder(block.moves||[], block.label||'Line');actionGroup.appendChild(brilliantBtn);
       hdr.appendChild(actionGroup);
       el.appendChild(hdr);const body=document.createElement('div');body.className='block-line-body';body.appendChild(buildLineWidget(block.moves||[]));el.appendChild(body);container.appendChild(el);
     } else if(block.type==='tabs'){
@@ -4691,6 +4956,7 @@ document.getElementById('toggle-btn').addEventListener('click',()=>{
   else if(LINES.length>0) openEd(0);
   else openEd(null);
 });
+document.getElementById('brilliant-top-btn').addEventListener('click',()=>openBrilliantMoveFinder());
 
 // Warn before leaving with unsaved changes
 window.addEventListener('beforeunload',e=>{ if(unsaved){ e.preventDefault(); e.returnValue=''; } });
