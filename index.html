@@ -112,6 +112,7 @@ main { padding: 36px 48px; max-width: 920px; }
 .block-line { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; }
 .block-line-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg3); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .block-line-label { font-size: 12px; font-weight: 600; color: var(--text2); letter-spacing: -.01em; }
+.line-action-btn { margin-left: auto; }
 .pop-wrap { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .pop-bar { width: 64px; height: 3px; background: var(--border2); border-radius: 2px; overflow: hidden; }
 .pop-fill { height: 100%; background: var(--accent); border-radius: 2px; }
@@ -820,11 +821,58 @@ body.editor-page-open > footer {
 .eval-bar { position: relative; width: 22px; height: calc(var(--sq) * 8); background: #ece9e3; border: 1px solid var(--border2); border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
 .eval-black { position: absolute; inset: 0 0 auto 0; height: 50%; background: #111010; transition: height .18s ease; }
 .eval-marker { position: absolute; left: 0; width: 100%; height: 2px; background: var(--accent); top: 50%; transform: translateY(-1px); pointer-events: none; opacity: .9; }
+.eval-score {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+  text-shadow: 0 1px 2px rgba(0,0,0,.45);
+}
+.eval-score.top { top: 8px; color: #f3f0ea; }
+.eval-score.bottom { bottom: 8px; color: #111010; text-shadow: none; }
 .eval-meta { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .eval-text { font-size: 12px; color: var(--text2); font-family: 'JetBrains Mono', monospace; font-weight: 600; min-height: 16px; }
-.eval-state { font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: .08em; }
+.eval-state { display: none; font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: .08em; }
 .eval-state.ready { color: var(--success); }
 .eval-state.err { color: var(--danger); }
+.editor-line-row { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(220px, .9fr); gap: 10px; align-items: stretch; }
+.engine-line-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 3px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 46px; }
+.engine-line-label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted2); }
+.engine-line-value { font-size: 12px; line-height: 1.6; color: var(--text); font-family: 'JetBrains Mono', monospace; }
+.engine-line-value.empty { color: var(--muted2); font-style: italic; font-family: 'Outfit', sans-serif; }
+.practice-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.78); z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.practice-card { width: min(1120px, 100%); max-height: calc(100vh - 48px); overflow: auto; background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
+.practice-setup { width: min(560px, 100%); padding: 28px; display: flex; flex-direction: column; gap: 18px; }
+.practice-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.practice-title { font-size: 22px; font-weight: 700; color: var(--text2); letter-spacing: -.02em; }
+.practice-sub { font-size: 13px; color: var(--muted); line-height: 1.7; max-width: 420px; }
+.practice-close { flex: 0 0 auto; }
+.practice-color-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.practice-color-btn { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; transition: border-color .12s, background .12s, transform .12s; color: var(--text2); font-family: inherit; }
+.practice-color-btn:hover { border-color: var(--accent); background: var(--bg4); transform: translateY(-1px); }
+.practice-color-btn img { width: 54px; height: 54px; display: block; }
+.practice-color-btn small { color: var(--muted); font-size: 12px; }
+.practice-room { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+.practice-room-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.practice-room-copy { display: flex; flex-direction: column; gap: 4px; }
+.practice-room-title { font-size: 18px; font-weight: 700; color: var(--text2); }
+.practice-room-sub { font-size: 12px; color: var(--muted); }
+.practice-room .study-layout { align-items: flex-start; }
+.practice-room .move-panel { max-width: min(100%, 440px); }
+.practice-strength { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg3); }
+.practice-strength-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.practice-strength-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.practice-strength-value { font-size: 14px; font-weight: 700; color: var(--text2); }
+.practice-strength-slider { width: 100%; accent-color: var(--accent); }
+.practice-strength-hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.practice-status { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--border); border-left: 3px solid var(--accent2); border-radius: 0 var(--radius) var(--radius) 0; background: var(--bg3); color: var(--text); line-height: 1.6; font-size: 13px; }
+.practice-status.err { border-left-color: var(--danger); color: #f2b0b0; }
+.practice-status.ok { border-left-color: var(--success); }
 
 @media (max-width: 768px) {
   :root { --sq: 42px; --editor-w: 100vw; }
@@ -841,7 +889,18 @@ body.editor-page-open > footer {
   .eval-bar { width: 100%; height: 14px; }
   .eval-black { inset: 0 auto 0 0; width: 50%; height: 100%; transition: width .18s ease; }
   .eval-marker { top: 0; left: 50%; width: 2px; height: 100%; transform: translateX(-1px); }
+  .eval-score.top,
+  .eval-score.bottom {
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+  .eval-score.top { left: 10px; color: #f3f0ea; }
+  .eval-score.bottom { left: auto; right: 10px; color: #111010; }
   .eval-meta { flex-direction: row; justify-content: space-between; width: 100%; }
+  .editor-line-row { grid-template-columns: 1fr; }
+  .practice-color-grid { grid-template-columns: 1fr; }
+  .practice-room .move-panel { max-width: 100%; }
   .board-wrap { width: 100%; }
   .board-coords { grid-template-columns: 14px calc(var(--sq)*8); grid-template-rows: calc(var(--sq)*8) 14px; }
   .move-list-inner { max-height: 180px; }
@@ -1296,7 +1355,7 @@ function checkedKingSquareFromGame(game){
   return null;
 }
 
-function buildEditorBoardInput(block,sanBox,refreshComments){
+function buildEditorBoardInput(block,sanBox,refreshComments,onEngineLineChange){
   const shell=el('div','ed-board-shell');
   const top=el('div','ed-board-top');
   const status=el('div','ed-board-status');
@@ -1313,7 +1372,14 @@ function buildEditorBoardInput(block,sanBox,refreshComments){
   const evalBar=el('div','eval-bar');
   const evalBlack=el('div','eval-black');
   const evalMarker=el('div','eval-marker');
-  evalBar.appendChild(evalBlack); evalBar.appendChild(evalMarker);
+  const evalTop = el('div','eval-score top');
+  const evalBottom = el('div','eval-score bottom');
+  evalTop.textContent = '';
+  evalBottom.textContent = '0.0';
+  evalBar.appendChild(evalTop);
+  evalBar.appendChild(evalBottom);
+  evalBar.appendChild(evalBlack);
+  evalBar.appendChild(evalMarker);
   const evalMeta=el('div','eval-meta');
   const evalText=el('div','eval-text'); evalText.textContent='0.0';
   const evalState=el('div','eval-state'); evalState.textContent='idle';
@@ -1338,7 +1404,7 @@ function buildEditorBoardInput(block,sanBox,refreshComments){
   hint.textContent='Click or drag pieces. Legal moves show dots and rings. Notation is added automatically. Promotions let you choose a piece.';
   shell.appendChild(hint);
 
-  const evalUi = { black: evalBlack, marker: evalMarker, text: evalText, state: evalState };
+  const evalUi = { bar: evalBar, black: evalBlack, marker: evalMarker, text: evalText, state: evalState, top: evalTop, bottom: evalBottom };
 
   let selected=null;
   let boardFlipped=false;
@@ -1644,7 +1710,16 @@ function buildEditorBoardInput(block,sanBox,refreshComments){
     evalTimer = setTimeout(()=>{
       const state = stateFromMoves();
       const fen = state.fen || (boardOnlyFen(board)+' '+turn+' - - 0 1');
-      requestEval(fen, turn, payload=>updateEvalUI(evalUi, payload), txt=>setEvalStatus(evalUi, txt), 12);
+      requestEval(
+        fen,
+        turn,
+        payload=>{
+          updateEvalUI(evalUi, payload);
+          if(onEngineLineChange) onEngineLineChange(payload, fen);
+        },
+        txt=>setEvalStatus(evalUi, txt),
+        18
+      );
     }, 150);
   }
 
@@ -1722,7 +1797,9 @@ function buildEditorBoardInput(block,sanBox,refreshComments){
       }
     }
     applyHoverHighlight(hoverTarget);
-    drawArr(ac,lastFrom?lastFrom.r:-1,lastFrom?lastFrom.f:-1,lastTo?lastTo.r:-1,lastTo?lastTo.f:-1);
+    const arrowFrom = lastFrom ? (boardFlipped ? { r: 7 - lastFrom.r, f: 7 - lastFrom.f } : lastFrom) : null;
+    const arrowTo = lastTo ? (boardFlipped ? { r: 7 - lastTo.r, f: 7 - lastTo.f } : lastTo) : null;
+    drawArr(ac, arrowFrom ? arrowFrom.r : -1, arrowFrom ? arrowFrom.f : -1, arrowTo ? arrowTo.r : -1, arrowTo ? arrowTo.f : -1);
     if(badIndex<0) queueEditorEval(board, turn);
   }
 
@@ -1904,6 +1981,12 @@ function buildLineWidget(moves){
   const evalBar = el('div','eval-bar');
   const evalBlack = el('div','eval-black');
   const evalMarker = el('div','eval-marker');
+  const evalTop = el('div','eval-score top');
+  const evalBottom = el('div','eval-score bottom');
+  evalTop.textContent = '';
+  evalBottom.textContent = '0.0';
+  evalBar.appendChild(evalTop);
+  evalBar.appendChild(evalBottom);
   evalBar.appendChild(evalBlack);
   evalBar.appendChild(evalMarker);
   const evalMeta = el('div','eval-meta');
@@ -1915,7 +1998,7 @@ function buildLineWidget(moves){
   evalWrap.appendChild(evalMeta);
   evalShell.appendChild(evalWrap);
 
-  const evalUi = { black: evalBlack, marker: evalMarker, text: evalText, state: evalState };
+  const evalUi = { bar: evalBar, black: evalBlack, marker: evalMarker, text: evalText, state: evalState, top: evalTop, bottom: evalBottom };
 
   const bw = el('div','board-wrap');
   const coords = el('div','board-coords');
@@ -2059,7 +2142,7 @@ function buildLineWidget(moves){
           s.turn,
           payload => updateEvalUI(evalUi, payload),
           txt => setEvalStatus(evalUi, txt),
-          12
+          18
         );
       } catch(_) {}
     }
@@ -2078,6 +2161,713 @@ function buildLineWidget(moves){
   layout.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft'){ stopPlay(); goto(ply-1); } if(e.key==='ArrowRight'){ stopPlay(); goto(ply+1); } });
   goto(0);
   return layout;
+}
+
+function buildStatesFromMoves(moves){
+  if(typeof Chess !== 'function'){
+    return {
+      states: [{
+        board: f2b('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'),
+        from: null,
+        to: null,
+        san: '',
+        turn: 'w',
+        comment: '',
+        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        checkSquare: null
+      }],
+      game: null
+    };
+  }
+
+  const game = new Chess();
+  const states = [{
+    board: boardFromChessJs(game),
+    from: null,
+    to: null,
+    san: '',
+    turn: game.turn(),
+    comment: '',
+    fen: game.fen(),
+    checkSquare: checkedKingSquareFromGame(game)
+  }];
+
+  for(const mv of moves || []){
+    try {
+      const res = game.move(mv.san, { sloppy: true });
+      if(!res) continue;
+      states.push({
+        board: boardFromChessJs(game),
+        from: { r: 8 - parseInt(res.from[1],10), f: res.from.charCodeAt(0) - 97 },
+        to:   { r: 8 - parseInt(res.to[1],10),   f: res.to.charCodeAt(0) - 97 },
+        san: mv.san,
+        turn: game.turn(),
+        comment: mv.comment || '',
+        fen: game.fen(),
+        checkSquare: checkedKingSquareFromGame(game)
+      });
+    } catch(_) {}
+  }
+
+  return { states, game };
+}
+
+function openPracticeSetup(moves, label='Line'){
+  const overlay = el('div','practice-overlay');
+  const card = el('div','practice-card practice-setup');
+  const close = ()=>overlay.remove();
+
+  const head = el('div','practice-head');
+  const copy = document.createElement('div');
+  const title = el('div','practice-title');
+  title.textContent = 'Practice line';
+  copy.appendChild(title);
+  const sub = el('div','practice-sub');
+  sub.textContent = `Start from "${label}" and continue from that saved position against Stockfish.`;
+  copy.appendChild(sub);
+  const closeBtn = el('button','hbtn practice-close');
+  closeBtn.textContent = 'Close';
+  closeBtn.onclick = close;
+  head.appendChild(copy);
+  head.appendChild(closeBtn);
+  card.appendChild(head);
+
+  const grid = el('div','practice-color-grid');
+  [
+    { color:'w', label:'Play White', sub:'Board stays on White.', piece:'wK' },
+    { color:'b', label:'Play Black', sub:'Board flips to Black automatically.', piece:'bK' }
+  ].forEach(opt=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'practice-color-btn';
+    btn.innerHTML = `<img src="${BASE}${opt.piece}.svg" alt="${opt.label}"><strong>${opt.label}</strong><small>${opt.sub}</small>`;
+    btn.onclick = ()=>card.replaceWith(buildPracticeRoom(moves, label, opt.color, close));
+    grid.appendChild(btn);
+  });
+  card.appendChild(grid);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+}
+
+function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
+  const card = el('div','practice-card practice-room');
+  const head = el('div','practice-room-head');
+  const copy = el('div','practice-room-copy');
+  const roomTitle = el('div','practice-room-title');
+  roomTitle.textContent = `Practice: ${label}`;
+  const roomSub = el('div','practice-room-sub');
+  roomSub.textContent = `Playing as ${userColor === 'w' ? 'White' : 'Black'} from the saved line position.`;
+  copy.appendChild(roomTitle);
+  copy.appendChild(roomSub);
+  const closeBtn = el('button','hbtn practice-close');
+  closeBtn.textContent = 'Close';
+  closeBtn.onclick = closeRoom;
+  head.appendChild(copy);
+  head.appendChild(closeBtn);
+  card.appendChild(head);
+
+  const extraMoves = [];
+  let states = [];
+  let ply = 0;
+  let selected = null;
+  let hoverTarget = null;
+  let flipped = userColor === 'b';
+  let botThinking = false;
+  let botFen = '';
+  let dragState = null;
+  let dragGhost = null;
+  let dragHoldTimer = null;
+  let pendingDragStart = null;
+  let pendingPromotion = null;
+  let cleanupDone = false;
+  let practiceElo = 1600;
+  const playerTurn = userColor;
+  const engineTurn = userColor === 'w' ? 'b' : 'w';
+  const PRACTICE_MIN_ELO = 100;
+  const PRACTICE_MAX_ELO = 3200;
+  const practiceDepthFromElo = elo => Math.max(1, Math.min(40, Math.round(1 + ((elo - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO)) * 39)));
+  const practiceSkillFromElo = elo => Math.max(0, Math.min(20, Math.round(((elo - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO)) * 20)));
+  const practiceThinkMsFromElo = elo => Math.round(350 + ((elo - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO)) * 5650);
+  const practiceMultiPvFromElo = elo => {
+    const weakness = 1 - ((Math.max(PRACTICE_MIN_ELO, Math.min(PRACTICE_MAX_ELO, elo)) - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO));
+    return weakness > 0.8 ? 8 : weakness > 0.6 ? 6 : weakness > 0.35 ? 4 : 2;
+  };
+
+  const layout = el('div','study-layout');
+  const evalShell = el('div','eval-shell');
+  const evalWrap = el('div','eval-wrap');
+  const evalBar = el('div','eval-bar');
+  const evalBlack = el('div','eval-black');
+  const evalMarker = el('div','eval-marker');
+  const evalTop = el('div','eval-score top');
+  const evalBottom = el('div','eval-score bottom');
+  evalTop.textContent = '';
+  evalBottom.textContent = '0.0';
+  evalBar.appendChild(evalTop);
+  evalBar.appendChild(evalBottom);
+  evalBar.appendChild(evalBlack);
+  evalBar.appendChild(evalMarker);
+  const evalMeta = el('div','eval-meta');
+  const evalText = el('div','eval-text'); evalText.textContent = '0.0';
+  const evalState = el('div','eval-state'); evalState.textContent = '';
+  evalMeta.appendChild(evalText);
+  evalMeta.appendChild(evalState);
+  evalWrap.appendChild(evalBar);
+  evalWrap.appendChild(evalMeta);
+  evalShell.appendChild(evalWrap);
+  const evalUi = { bar: evalBar, black: evalBlack, marker: evalMarker, text: evalText, state: evalState, top: evalTop, bottom: evalBottom };
+
+  const bw = el('div','board-wrap');
+  const coords = el('div','board-coords');
+  const rl = el('div','rank-labels');
+  for(let i=8;i>=1;i--){ const s=document.createElement('span'); s.textContent=i; rl.appendChild(s); }
+  const gw = el('div','board-gwrap');
+  const grid = el('div','board-grid');
+  const ac = document.createElement('canvas'); ac.className='board-arrow-layer';
+  gw.appendChild(grid); gw.appendChild(ac);
+  const fl = el('div','file-labels');
+  'abcdefgh'.split('').forEach(ch=>{ const s=document.createElement('span'); s.textContent=ch; fl.appendChild(s); });
+  coords.appendChild(rl); coords.appendChild(gw); coords.appendChild(fl); bw.appendChild(coords);
+
+  const mp = el('div','move-panel');
+  const strengthBox = el('div','practice-strength');
+  const strengthTop = el('div','practice-strength-top');
+  const strengthLabel = el('div','practice-strength-label'); strengthLabel.textContent = 'Bot Difficulty';
+  const strengthValue = el('div','practice-strength-value');
+  strengthTop.appendChild(strengthLabel);
+  strengthTop.appendChild(strengthValue);
+  const strengthSlider = document.createElement('input');
+  strengthSlider.className = 'practice-strength-slider';
+  strengthSlider.type = 'range';
+  strengthSlider.min = String(PRACTICE_MIN_ELO);
+  strengthSlider.max = String(PRACTICE_MAX_ELO);
+  strengthSlider.step = '100';
+  strengthSlider.value = String(practiceElo);
+  const strengthHint = el('div','practice-strength-hint');
+  strengthBox.appendChild(strengthTop);
+  strengthBox.appendChild(strengthSlider);
+  strengthBox.appendChild(strengthHint);
+  const nav = el('div','move-nav');
+  const b1 = el('button','mv-btn'); b1.textContent='⏮';
+  const b2 = el('button','mv-btn'); b2.textContent='◀';
+  const flipBtn = el('button','mv-btn'); flipBtn.textContent='⇅';
+  const b3 = el('button','mv-btn'); b3.textContent='▶';
+  const b4 = el('button','mv-btn'); b4.textContent='⏭';
+  const ctr = el('div','mv-ctr');
+  const leftControls = el('div','mv-left-controls');
+  [b1,b2,b3,b4,ctr,flipBtn].forEach(node=>leftControls.appendChild(node));
+  nav.appendChild(leftControls);
+  const ml = el('div','move-list-inner');
+  const status = el('div','practice-status');
+  mp.appendChild(strengthBox); mp.appendChild(nav); mp.appendChild(ml); mp.appendChild(status);
+  layout.appendChild(evalShell); layout.appendChild(bw); layout.appendChild(mp);
+  card.appendChild(layout);
+
+  const coordsToSq = (r,f)=>String.fromCharCode(97+f)+(8-r);
+  const sqToCoords = square=>({ r: 8 - parseInt(square[1],10), f: square.charCodeAt(0) - 97 });
+
+  function getCombinedMoves(){
+    return (seedMoves || []).map(mv=>({ san: mv.san, comment: mv.comment || '' })).concat(extraMoves);
+  }
+
+  function setPracticeStatus(text, kind=''){
+    status.textContent = text;
+    status.className = 'practice-status' + (kind ? ' ' + kind : '');
+  }
+
+  function renderPracticeStrength(){
+    const depth = practiceDepthFromElo(practiceElo);
+    strengthValue.textContent = `${practiceElo} Elo`;
+    strengthHint.textContent = `Depth ${depth} search. 3200 aims for depth 40, while 100 only looks 1 move deep and will miss stronger replies.`;
+  }
+
+  function clearPromotionOverlay(){
+    const ex = gw.querySelector('.promo-inline');
+    if(ex) ex.remove();
+  }
+
+  function renderPromotionOverlay(){
+    clearPromotionOverlay();
+    if(!pendingPromotion) return;
+
+    const targetSq = pendingPromotion.square || pendingPromotion.to;
+    const color = pendingPromotion.color || pendingPromotion.turn || 'w';
+    const overlay = el('div','promo-inline');
+
+    const addCancel = () => {
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'promo-inline-cancel';
+      cancel.textContent = 'x';
+      cancel.title = 'Cancel promotion';
+      cancel.setAttribute('aria-label', 'Cancel promotion');
+      cancel.addEventListener('pointerup', ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        pendingPromotion = null;
+        selected = null;
+        hoverTarget = null;
+        drawBoard();
+      });
+      cancel.addEventListener('click', ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+      });
+      overlay.appendChild(cancel);
+    };
+
+    if(color === 'b') addCancel();
+
+    ['Q','N','R','B'].forEach(pc => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'promo-inline-btn';
+      btn.title = {Q:'Queen',N:'Knight',R:'Rook',B:'Bishop'}[pc];
+      btn.setAttribute('aria-label', btn.title);
+      btn.innerHTML = `<img src="${BASE}${color}${pc}.svg" alt="${btn.title}">`;
+      btn.addEventListener('pointerup', ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        finishPromotion(pc);
+      });
+      btn.addEventListener('click', ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+      });
+      overlay.appendChild(btn);
+    });
+
+    if(color === 'w') addCancel();
+
+    if(getComputedStyle(gw).position === 'static') gw.style.position = 'relative';
+    const size = Math.min(gw.clientWidth || 0, gw.clientHeight || 0) || ((parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sq')) || 56) * 8);
+    const sq = size / 8;
+    const overlayHeight = sq * 4 + sq * 0.72;
+    const vis = flipped ? { r: 7 - targetSq.r, f: 7 - targetSq.f } : { r: targetSq.r, f: targetSq.f };
+
+    let left = vis.f * sq;
+    let top = color === 'w' ? (vis.r * sq) - (overlayHeight - sq) : (vis.r * sq);
+    left = Math.max(0, Math.min(left, size - sq));
+    top = Math.max(0, Math.min(top, size - overlayHeight));
+
+    overlay.style.left = left + 'px';
+    overlay.style.top = top + 'px';
+    gw.appendChild(overlay);
+  }
+
+  function currentState(){
+    return states[ply];
+  }
+
+  function currentGame(){
+    const state = currentState();
+    if(!state?.fen || typeof Chess !== 'function') return null;
+    try { return new Chess(state.fen); } catch(_) { return null; }
+  }
+
+  function rebuildStates(){
+    states = buildStatesFromMoves(getCombinedMoves()).states;
+    ply = Math.min(ply, states.length - 1);
+  }
+
+  function renderMoveList(){
+    ml.innerHTML = '';
+    const combined = getCombinedMoves();
+    let moveNo = 1;
+    for(let i=0;i<combined.length;i+=2){
+      const row = el('div','mp');
+      const num = el('div','mn'); num.textContent = moveNo + '.';
+      row.appendChild(num);
+      const w = combined[i];
+      const wb = el('button','mb'); wb.dataset.ply = String(i+1); wb.textContent = w?.san || '';
+      wb.onclick = ()=>goto(i+1);
+      row.appendChild(wb);
+      if(i+1 < combined.length){
+        const b = combined[i+1];
+        const bb = el('button','mb'); bb.dataset.ply = String(i+2); bb.textContent = b?.san || '';
+        bb.onclick = ()=>goto(i+2);
+        row.appendChild(bb);
+      }
+      ml.appendChild(row);
+      moveNo++;
+    }
+  }
+
+  function maybeRequestEval(){
+    const state = currentState();
+    if(!state?.fen) return;
+    const livePosition = ply === states.length - 1;
+    const game = livePosition ? currentGame() : null;
+    if(pendingPromotion || (livePosition && (botThinking || game?.turn() === engineTurn))) return;
+    requestEval(state.fen, state.turn, payload=>updateEvalUI(evalUi, payload), txt=>setEvalStatus(evalUi, txt), 18);
+  }
+
+  function finishPromotion(pieceCode){
+    if(!pendingPromotion || typeof Chess !== 'function') return;
+    const game = new Chess(pendingPromotion.fen);
+    const res = game.move({
+      from: coordsToSq(pendingPromotion.from.r, pendingPromotion.from.f),
+      to: coordsToSq(pendingPromotion.to.r, pendingPromotion.to.f),
+      promotion: String(pieceCode || 'Q').toLowerCase()
+    });
+    if(!res){
+      pendingPromotion = null;
+      selected = null;
+      hoverTarget = null;
+      drawBoard();
+      return;
+    }
+    pendingPromotion = null;
+    pushMove(res, 'player');
+  }
+
+  function tryPlayerMove(from, to){
+    const game = currentGame();
+    if(!game || botThinking || ply !== states.length - 1 || game.turn() !== playerTurn || game.game_over() || pendingPromotion) return false;
+    const fromSq = coordsToSq(from.r, from.f);
+    const toSq = coordsToSq(to.r, to.f);
+    const legal = (game.moves({ square: fromSq, verbose: true }) || []).find(mv => mv.to === toSq);
+    if(!legal) return false;
+
+    if(legal.flags && legal.flags.includes('p')){
+      pendingPromotion = {
+        fen: game.fen(),
+        turn: game.turn(),
+        color: game.turn(),
+        from: { r: from.r, f: from.f },
+        to: { r: to.r, f: to.f },
+        square: { r: to.r, f: to.f }
+      };
+      selected = null;
+      hoverTarget = null;
+      drawBoard();
+      return true;
+    }
+
+    const res = game.move({ from: fromSq, to: toSq, promotion: 'q' });
+    if(!res) return false;
+    selected = null;
+    hoverTarget = null;
+    pushMove(res, 'player');
+    return true;
+  }
+
+  function renderLegalMarkerLocal(sqEl, isCapture){
+    const marker = document.createElement('div');
+    marker.className = isCapture ? 'capture-ring' : 'move-dot';
+    sqEl.appendChild(marker);
+  }
+
+  function sameSq(a,b){ return !!a && !!b && a.r===b.r && a.f===b.f; }
+
+  function removeGhost(){
+    if(dragGhost){ dragGhost.remove(); dragGhost = null; }
+  }
+
+  function ensureGhost(pieceCode){
+    removeGhost();
+    dragGhost = document.createElement('div');
+    dragGhost.className = 'drag-ghost';
+    dragGhost.innerHTML = PS[pieceCode] || '';
+    document.body.appendChild(dragGhost);
+  }
+
+  function moveGhost(x,y){
+    if(!dragGhost) return;
+    dragGhost.style.left = x + 'px';
+    dragGhost.style.top = y + 'px';
+  }
+
+  function squareFromPoint(x,y){
+    const elAt = document.elementFromPoint(x,y);
+    if(!elAt) return null;
+    const sq = elAt.closest('.sq[data-r][data-f]');
+    if(!sq || !grid.contains(sq)) return null;
+    return { r: +sq.dataset.r, f: +sq.dataset.f };
+  }
+
+  function applyHoverHighlight(nextSq){
+    const prev = grid.querySelector('.sq.drag-target');
+    if(prev) prev.classList.remove('drag-target');
+    if(nextSq){
+      const sqEl = grid.querySelector(`.sq[data-r="${nextSq.r}"][data-f="${nextSq.f}"]`);
+      if(sqEl) sqEl.classList.add('drag-target');
+    }
+  }
+
+  function clearPendingDrag(){
+    if(dragHoldTimer){
+      clearTimeout(dragHoldTimer);
+      dragHoldTimer = null;
+    }
+    pendingDragStart = null;
+  }
+
+  function beginDrag(from, piece, x, y){
+    selected = { r: from.r, f: from.f };
+    dragState = { from: { r: from.r, f: from.f }, piece };
+    hoverTarget = null;
+    ensureGhost(piece);
+    moveGhost(x, y);
+    drawBoard();
+  }
+
+  function drawBoard(){
+    const state = currentState();
+    const game = currentGame();
+    const legalTargets = new Map();
+    if(selected && game && ply === states.length - 1 && game.turn() === playerTurn){
+      (game.moves({ square: coordsToSq(selected.r, selected.f), verbose: true }) || []).forEach(mv=>{
+        const target = sqToCoords(mv.to);
+        legalTargets.set(target.r + ',' + target.f, { capture: !!mv.captured });
+      });
+    }
+
+    grid.innerHTML = '';
+    for(let rr=0; rr<8; rr++){
+      for(let ff=0; ff<8; ff++){
+        const { r, f } = flipped ? { r:7-rr, f:7-ff } : { r:rr, f:ff };
+        const sqEl=document.createElement('div');
+        sqEl.className='sq '+(((rr+ff)&1)?'dark':'light');
+        sqEl.dataset.r = String(r);
+        sqEl.dataset.f = String(f);
+        if(state.checkSquare && state.checkSquare.r === r && state.checkSquare.f === f) sqEl.classList.add('king-in-check');
+        if(selected && selected.r === r && selected.f === f) sqEl.classList.add('hl-from');
+        if(state.to && state.to.r === r && state.to.f === f) sqEl.classList.add('hl-to');
+        if(hoverTarget && hoverTarget.r === r && hoverTarget.f === f) sqEl.classList.add('drag-target');
+        const legal = legalTargets.get(r + ',' + f);
+        if(legal && !(selected && selected.r === r && selected.f === f)) renderLegalMarkerLocal(sqEl, legal.capture);
+        const piece = state.board[r]?.[f];
+        if(piece && PS[piece]){
+          const pieceWrap=document.createElement('div');
+          pieceWrap.className='piece';
+          if(dragState && dragState.from && dragState.from.r === r && dragState.from.f === f) pieceWrap.classList.add('drag-hidden');
+          pieceWrap.innerHTML=PS[piece];
+          sqEl.appendChild(pieceWrap);
+        }
+        sqEl.onclick = ()=>handleSquareClick(r, f);
+        sqEl.addEventListener('pointerdown', ev=>onSquarePointerDown(ev, r, f));
+        sqEl.addEventListener('pointerenter', ()=>{
+          if(!dragState) return;
+          const nextHover = legalTargets.has(r + ',' + f) ? { r, f } : null;
+          hoverTarget = nextHover;
+          applyHoverHighlight(hoverTarget);
+        });
+        grid.appendChild(sqEl);
+      }
+    }
+    applyHoverHighlight(hoverTarget);
+    const from = state.from ? (flipped ? { r: 7 - state.from.r, f: 7 - state.from.f } : state.from) : null;
+    const to = state.to ? (flipped ? { r: 7 - state.to.r, f: 7 - state.to.f } : state.to) : null;
+    drawArr(ac, from ? from.r : -1, from ? from.f : -1, to ? to.r : -1, to ? to.f : -1);
+    renderPromotionOverlay();
+  }
+
+  function goto(nextPly){
+    ply = Math.max(0, Math.min(nextPly, states.length - 1));
+    selected = null;
+    ctr.textContent = `${ply} / ${states.length - 1}`;
+    ml.querySelectorAll('.mb').forEach(btn => btn.classList.toggle('active', +btn.dataset.ply === ply));
+    const active = ml.querySelector('.mb.active');
+    if(active) active.scrollIntoView({ block:'nearest', behavior:'smooth' });
+    drawBoard();
+
+    const game = currentGame();
+    if(!game){
+      setPracticeStatus('Practice room could not load this position.', 'err');
+      return;
+    }
+    if(ply !== states.length - 1){
+      setPracticeStatus('Viewing an earlier move. Jump to the latest move to keep playing.');
+      return;
+    }
+    if(game.game_over()){
+      setPracticeStatus('Game over. Review the move list or close to practice again.', 'ok');
+      return;
+    }
+    if(pendingPromotion){
+      setPracticeStatus((playerTurn === 'w' ? 'White' : 'Black') + ' promotion - choose a piece.');
+      return;
+    }
+    if(game.turn() === playerTurn){
+      setPracticeStatus(`Your move as ${playerTurn === 'w' ? 'White' : 'Black'}.`);
+    } else if(botThinking){
+      setPracticeStatus('Stockfish is thinking…');
+    } else {
+      setPracticeStatus('Stockfish to move.');
+      maybeBotMove();
+      return;
+    }
+    maybeRequestEval();
+  }
+
+  function pushMove(res, source){
+    extraMoves.push({ san: res.san, comment: source === 'engine' ? 'Stockfish' : '' });
+    pendingPromotion = null;
+    rebuildStates();
+    renderMoveList();
+    goto(states.length - 1);
+  }
+
+  function maybeBotMove(){
+    const game = currentGame();
+    if(!game || botThinking || ply !== states.length - 1 || game.turn() !== engineTurn || game.game_over()) return;
+    botThinking = true;
+    botFen = game.fen();
+    setPracticeStatus('Stockfish is thinking…');
+    requestBestMove(botFen, game.turn(), bestmove=>{
+      if(botFen !== (currentState()?.fen || '')){
+        botThinking = false;
+        return;
+      }
+      botThinking = false;
+      const fresh = currentGame();
+      if(!fresh || fresh.fen() !== botFen) return;
+      const res = applyUciMove(fresh, bestmove);
+      if(!res?.san){
+        setPracticeStatus('Stockfish could not find a legal move here.', 'err');
+        return;
+      }
+      pushMove(res, 'engine');
+    }, ()=>{}, {
+      thinkMs: practiceThinkMsFromElo(practiceElo),
+      depth: practiceDepthFromElo(practiceElo),
+      skill: practiceSkillFromElo(practiceElo),
+      elo: practiceElo,
+      multiPv: practiceMultiPvFromElo(practiceElo)
+    });
+  }
+
+  function handleSquareClick(r, f){
+    const game = currentGame();
+    if(!game || botThinking || ply !== states.length - 1 || game.turn() !== playerTurn || game.game_over() || dragState || pendingPromotion) return;
+    const piece = game.board()[r]?.[f];
+    if(selected){
+      if(piece && piece.color === playerTurn){
+        selected = { r, f };
+        drawBoard();
+        return;
+      }
+      if(!tryPlayerMove(selected, { r, f })) return;
+      return;
+    }
+    if(piece && piece.color === playerTurn){
+      selected = { r, f };
+      hoverTarget = null;
+      drawBoard();
+    }
+  }
+
+  function onSquarePointerDown(ev, r, f){
+    const game = currentGame();
+    if(!game || botThinking || ply !== states.length - 1 || game.turn() !== playerTurn || game.game_over() || pendingPromotion) return;
+    if(ev.button !== 0) return;
+    const piece = game.board()[r]?.[f];
+    if(!piece || piece.color !== playerTurn) return;
+    ev.preventDefault();
+    clearPendingDrag();
+    pendingDragStart = {
+      pointerId: ev.pointerId,
+      from: { r, f },
+      piece: (piece.color === 'w' ? 'w' : 'b') + piece.type.toUpperCase(),
+      startX: ev.clientX,
+      startY: ev.clientY
+    };
+    dragHoldTimer = setTimeout(()=>{
+      if(!pendingDragStart) return;
+      beginDrag(pendingDragStart.from, pendingDragStart.piece, pendingDragStart.startX, pendingDragStart.startY);
+      clearPendingDrag();
+    }, 180);
+  }
+
+  function globalPointerMove(ev){
+    if(dragState){
+      moveGhost(ev.clientX, ev.clientY);
+      const sq = squareFromPoint(ev.clientX, ev.clientY);
+      const game = currentGame();
+      const legalTargets = new Map();
+      if(selected && game && ply === states.length - 1 && game.turn() === playerTurn){
+        (game.moves({ square: coordsToSq(selected.r, selected.f), verbose: true }) || []).forEach(mv=>{
+          const target = sqToCoords(mv.to);
+          legalTargets.set(target.r + ',' + target.f, { capture: !!mv.captured });
+        });
+      }
+      const nextHover = (sq && legalTargets.has(sq.r + ',' + sq.f)) ? sq : null;
+      if((!nextHover && hoverTarget) || (nextHover && !sameSq(nextHover, hoverTarget))){
+        hoverTarget = nextHover;
+        applyHoverHighlight(hoverTarget);
+      }
+      return;
+    }
+    if(pendingDragStart && ev.pointerId === pendingDragStart.pointerId){
+      const dx = ev.clientX - pendingDragStart.startX;
+      const dy = ev.clientY - pendingDragStart.startY;
+      if((dx*dx + dy*dy) >= 64){
+        beginDrag(pendingDragStart.from, pendingDragStart.piece, ev.clientX, ev.clientY);
+        clearPendingDrag();
+      }
+    }
+  }
+
+  function globalPointerUp(ev){
+    if(dragState){
+      const from = dragState.from;
+      const sq = squareFromPoint(ev.clientX, ev.clientY);
+      removeGhost();
+      dragState = null;
+      hoverTarget = null;
+      applyHoverHighlight(null);
+      if(!sq || sameSq(sq, from)){
+        drawBoard();
+        return;
+      }
+      if(!tryPlayerMove(from, sq)){
+        drawBoard();
+        return;
+      }
+      return;
+    }
+    if(pendingDragStart && ev.pointerId === pendingDragStart.pointerId){
+      const from = pendingDragStart.from;
+      clearPendingDrag();
+      const game = currentGame();
+      const piece = game?.board()?.[from.r]?.[from.f];
+      if(piece && piece.color === playerTurn){
+        if(selected && selected.r === from.r && selected.f === from.f){
+          selected = null;
+          hoverTarget = null;
+        } else {
+          selected = { r: from.r, f: from.f };
+          hoverTarget = null;
+        }
+        drawBoard();
+      }
+    }
+  }
+
+  b1.onclick = ()=>goto(0);
+  b2.onclick = ()=>goto(ply - 1);
+  b3.onclick = ()=>goto(ply + 1);
+  b4.onclick = ()=>goto(states.length - 1);
+  flipBtn.onclick = ()=>{ flipped = !flipped; hoverTarget = null; drawBoard(); };
+  strengthSlider.oninput = ()=>{
+    practiceElo = +strengthSlider.value || 1600;
+    renderPracticeStrength();
+    setPracticeStatus(botThinking ? `Difficulty updated to ${practiceElo} Elo. Stockfish will use it on the next move.` : `Difficulty set to ${practiceElo} Elo.`);
+  };
+
+  if(!cleanupDone){
+    document.addEventListener('pointermove', globalPointerMove);
+    document.addEventListener('pointerup', globalPointerUp);
+    document.addEventListener('pointercancel', globalPointerUp);
+    cleanupDone = true;
+  }
+
+  rebuildStates();
+  renderMoveList();
+  renderPracticeStrength();
+  goto(states.length - 1);
+  return card;
 }
 
 
@@ -2100,7 +2890,9 @@ const ENGINE = {
   lastFen: '',
 };
 
-const ENGINE_SEARCH_MS = 1800;
+const ENGINE_SEARCH_MS = 5000;
+const ENGINE_HARD_TIMEOUT_MS = 6500;
+const ENGINE_PV_CACHE_PLY = 16;
 
 function resetEngineState(){
   ENGINE.ready = false;
@@ -2190,6 +2982,109 @@ function finishCurrentSearch(finalStatus){
   ENGINE.current = null;
 }
 
+function cloneEvalPayload(payload){
+  return payload ? { type: payload.type, value: payload.value, pv: Array.isArray(payload.pv) ? payload.pv.slice() : [] } : null;
+}
+
+function applyUciMove(chess, uci){
+  if(!uci || uci === '(none)' || uci.length < 4) return null;
+  return chess.move({
+    from: uci.slice(0,2),
+    to: uci.slice(2,4),
+    promotion: uci[4] || undefined,
+  });
+}
+
+function cachePrincipalVariation(job, payload, pvMoves){
+  if(!payload || !Array.isArray(pvMoves) || !pvMoves.length || typeof Chess !== 'function') return;
+
+  let chess;
+  try {
+    chess = new Chess(job.fen);
+  } catch(_) {
+    return;
+  }
+
+  for(const uci of pvMoves.slice(0, ENGINE_PV_CACHE_PLY)){
+    if(!applyUciMove(chess, uci)) break;
+    ENGINE.cache.set(chess.fen(), cloneEvalPayload(payload));
+  }
+}
+
+function configureEngineForJob(job){
+  if(!ENGINE.worker) return;
+  if(job.kind === 'move'){
+    const skill = Math.max(0, Math.min(20, Math.round(job.skill ?? 20)));
+    ENGINE.worker.postMessage('setoption name UCI_AnalyseMode value false');
+    ENGINE.worker.postMessage('setoption name Skill Level value ' + skill);
+    ENGINE.worker.postMessage('setoption name MultiPV value ' + Math.max(1, Math.min(8, job.multiPv || 1)));
+  } else {
+    ENGINE.worker.postMessage('setoption name UCI_AnalyseMode value true');
+    ENGINE.worker.postMessage('setoption name Skill Level value 20');
+    ENGINE.worker.postMessage('setoption name MultiPV value 1');
+  }
+}
+
+function scoreMoveCandidateFromInfo(line){
+  const pvMatch = line.match(/\spv\s+([a-h][1-8][a-h][1-8][nbrq]?)/i);
+  if(!pvMatch) return null;
+
+  const multiPvMatch = line.match(/\bmultipv\s+(\d+)/i);
+  const mate = line.match(/score mate (-?\d+)/i);
+  const cp = line.match(/score cp (-?\d+)/i);
+  let score = null;
+
+  if(mate){
+    const raw = parseInt(mate[1], 10);
+    score = raw > 0 ? 100000 - Math.abs(raw) : -100000 + Math.abs(raw);
+  } else if(cp){
+    score = parseInt(cp[1], 10);
+  }
+
+  if(score === null || Number.isNaN(score)) return null;
+  return {
+    move: pvMatch[1],
+    score,
+    multipv: multiPvMatch ? parseInt(multiPvMatch[1], 10) : 1
+  };
+}
+
+function pickMoveForDifficulty(job, fallbackMove){
+  if(!job?.moveCandidates?.length) return fallbackMove;
+
+  const sorted = job.moveCandidates
+    .slice()
+    .sort((a, b) => b.score - a.score || a.multipv - b.multipv);
+  const unique = [];
+  const seen = new Set();
+  for(const cand of sorted){
+    if(!cand?.move || seen.has(cand.move)) continue;
+    seen.add(cand.move);
+    unique.push(cand);
+  }
+  if(!unique.length) return fallbackMove;
+
+  const elo = Math.max(100, Math.min(3200, job.elo || 3200));
+  const weakness = 1 - ((elo - 100) / 3100);
+  if(weakness <= 0.02) return unique[0].move;
+
+  const maxRank = unique.length - 1;
+  const targetRank = Math.round(weakness * maxRank);
+  const jitter = Math.max(1, Math.round(weakness * 2));
+  const minRank = Math.max(0, targetRank - jitter);
+  const maxRankWindow = Math.min(maxRank, targetRank + jitter);
+  const pickRank = Math.min(maxRank, Math.max(0, minRank + Math.floor(Math.random() * (maxRankWindow - minRank + 1))));
+  const picked = unique[pickRank]?.move || unique[0].move || fallbackMove;
+
+  if(weakness > 0.75 && unique[maxRank]?.move && Math.random() < 0.35){
+    return unique[maxRank].move;
+  }
+  if(weakness > 0.5 && unique.length >= 3 && Math.random() < 0.4){
+    return unique[Math.min(maxRank, pickRank + 1)]?.move || picked;
+  }
+  return picked;
+}
+
 function beginTimedSearch(job){
   if(!ENGINE.worker) return;
   if(ENGINE.searchTimer){
@@ -2197,14 +3092,22 @@ function beginTimedSearch(job){
     ENGINE.searchTimer = null;
   }
 
+  job.bestPv = [];
+  job.lastPayload = null;
+  job.moveCandidates = [];
   job.onStatus('thinking');
   ENGINE.worker.postMessage('stop');
+  configureEngineForJob(job);
   ENGINE.worker.postMessage('position fen ' + job.fen);
-  ENGINE.worker.postMessage('go infinite');
+  if(job.kind === 'move' && job.depth){
+    ENGINE.worker.postMessage('go depth ' + job.depth);
+  } else {
+    ENGINE.worker.postMessage('go movetime ' + (job.thinkMs || ENGINE_SEARCH_MS));
+  }
 
   ENGINE.searchTimer = setTimeout(() => {
     finishCurrentSearch(ENGINE.mode === 'asm' ? 'saved (fallback)' : 'saved');
-  }, ENGINE_SEARCH_MS);
+  }, Math.max(ENGINE_HARD_TIMEOUT_MS, (job.thinkMs || ENGINE_SEARCH_MS) + 1200));
 }
 
 function handleEngineMsg(line){
@@ -2232,6 +3135,14 @@ function handleEngineMsg(line){
   }
 
   if(line.startsWith('bestmove')){
+    const bestmove = line.match(/^bestmove\s+(\S+)/);
+    if(bestmove && ENGINE.current?.kind === 'move' && ENGINE.current.onMove){
+      ENGINE.current.onMove(pickMoveForDifficulty(ENGINE.current, bestmove[1]));
+    }
+    if(bestmove && ENGINE.current?.lastPayload){
+      const pv = ENGINE.current.bestPv?.length ? ENGINE.current.bestPv : [bestmove[1]];
+      cachePrincipalVariation(ENGINE.current, ENGINE.current.lastPayload, pv);
+    }
     finishCurrentSearch(ENGINE.mode === 'asm' ? 'saved (fallback)' : 'saved');
     flushEngineQueue();
     return;
@@ -2239,6 +3150,18 @@ function handleEngineMsg(line){
 
   if(!ENGINE.current) return;
   const job = ENGINE.current;
+
+  if(job.kind === 'move'){
+    if(line.startsWith('info ') && line.includes(' score ') && line.includes(' pv ')){
+      const candidate = scoreMoveCandidateFromInfo(line);
+      if(candidate){
+        const idx = job.moveCandidates.findIndex(item => item.move === candidate.move);
+        if(idx >= 0) job.moveCandidates[idx] = candidate;
+        else job.moveCandidates.push(candidate);
+      }
+    }
+    return;
+  }
 
   if(line.startsWith('info ') && line.includes(' score ')){
     let payload = null;
@@ -2260,20 +3183,30 @@ function handleEngineMsg(line){
     }
 
     if(payload){
-      ENGINE.cache.set(job.fen, payload);
-      job.onEval(payload);
+      const pvMatch = line.match(/\spv\s+(.+)$/);
+      job.bestPv = pvMatch ? pvMatch[1].trim().split(/\s+/).filter(Boolean) : job.bestPv;
+      payload.pv = job.bestPv.slice();
+      job.lastPayload = cloneEvalPayload(payload);
+      ENGINE.cache.set(job.fen, cloneEvalPayload(payload));
+      cachePrincipalVariation(job, payload, job.bestPv);
+      job.onEval(cloneEvalPayload(payload));
     }
   }
 }
 
 function flushEngineQueue(){
-  if(!ENGINE.ready || !ENGINE.queue.length || !ENGINE.worker) return;
+  if(!ENGINE.ready || !ENGINE.queue.length || !ENGINE.worker || ENGINE.current) return;
 
-  const job = ENGINE.queue.pop();
-  ENGINE.queue.length = 0;
+  const moveIndex = ENGINE.queue.findIndex(job => job.kind === 'move');
+  const jobIndex = moveIndex >= 0 ? moveIndex : 0;
+  const job = ENGINE.queue.splice(jobIndex, 1)[0];
+  if(!job) return;
 
-  if(ENGINE.current && ENGINE.current.fen === job.fen){
-    return;
+  for(let i = ENGINE.queue.length - 1; i >= 0; i--){
+    const queued = ENGINE.queue[i];
+    if(queued.kind === 'eval' && queued.fen === job.fen){
+      ENGINE.queue.splice(i, 1);
+    }
   }
 
   ENGINE.current = job;
@@ -2281,16 +3214,37 @@ function flushEngineQueue(){
   beginTimedSearch(job);
 }
 
-function requestEval(fen, turn, onEval, onStatus, depth=12){
+function requestEval(fen, turn, onEval, onStatus, depth=18){
   if(ENGINE.cache.has(fen)){
-    onEval(ENGINE.cache.get(fen));
+    onEval(cloneEvalPayload(ENGINE.cache.get(fen)));
     onStatus(ENGINE.mode === 'asm' ? 'cached (fallback)' : 'cached');
     return;
   }
 
   initEngine();
 
-  const job = { id: ++ENGINE.latestJob, fen, turn, onEval, onStatus, depth };
+  ENGINE.queue = ENGINE.queue.filter(job => !(job.kind === 'eval' && job.fen === fen));
+  const job = { id: ++ENGINE.latestJob, kind:'eval', fen, turn, onEval, onStatus, depth, thinkMs: ENGINE_SEARCH_MS };
+  ENGINE.queue.push(job);
+
+  if(!ENGINE.uciOk || !ENGINE.ready){
+    onStatus(ENGINE.mode === 'asm' ? 'loading fallback' : 'loading engine');
+    return;
+  }
+
+  flushEngineQueue();
+}
+
+function requestBestMove(fen, turn, onMove, onStatus=()=>{}, options={}){
+  initEngine();
+
+  ENGINE.queue = ENGINE.queue.filter(job => !(job.kind === 'move' && job.fen === fen));
+  const thinkMs = typeof options === 'number' ? options : (options.thinkMs || 1800);
+  const depth = typeof options === 'object' ? options.depth : undefined;
+  const skill = typeof options === 'object' ? options.skill : undefined;
+  const elo = typeof options === 'object' ? options.elo : undefined;
+  const multiPv = typeof options === 'object' ? options.multiPv : undefined;
+  const job = { id: ++ENGINE.latestJob, kind:'move', fen, turn, onMove, onStatus, thinkMs, depth, skill, elo, multiPv };
   ENGINE.queue.push(job);
 
   if(!ENGINE.uciOk || !ENGINE.ready){
@@ -2305,6 +3259,41 @@ function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
 function evalToPct(score){
   const capped = clamp(score, -8, 8);
   return 50 - (capped / 8) * 50;
+}
+function pvToSan(fen, pvMoves, limit=8){
+  if(typeof Chess !== 'function' || !Array.isArray(pvMoves) || !pvMoves.length) return '';
+  let game;
+  try {
+    game = new Chess(fen);
+  } catch(_) {
+    return pvMoves.slice(0, limit).join(' ');
+  }
+
+  const sanMoves = [];
+  for(const uci of pvMoves.slice(0, limit)){
+    const res = applyUciMove(game, uci);
+    if(!res?.san) break;
+    sanMoves.push(res.san);
+  }
+  return sanMoves.join(' ');
+}
+function formatEvalHover(payload){
+  if(payload?.type === 'mate'){
+    const sign = payload.value > 0 ? '+' : payload.value < 0 ? '-' : '';
+    return sign + 'm' + Math.abs(payload.value);
+  }
+  if(payload?.type === 'cp'){
+    const val = Math.abs(payload.value).toFixed(1);
+    if(payload.value > 0) return '+' + val;
+    if(payload.value < 0) return '-' + val;
+    return '0.0';
+  }
+  return '0.0';
+}
+function formatEvalDisplay(payload){
+  if(payload?.type === 'mate') return 'm' + Math.abs(payload.value);
+  if(payload?.type === 'cp') return Math.abs(payload.value).toFixed(1);
+  return '0.0';
 }
 function boardOnlyFen(board){
   return board.map(row=>{
@@ -2326,15 +3315,16 @@ function stateFen(state){
 }
 function updateEvalUI(ui, payload){
   let pct = 50;
-  let text = '0.0';
+  const text = formatEvalDisplay(payload);
+  const hoverText = formatEvalHover(payload);
+  let winner = '';
   if(payload?.type === 'mate'){
     const s = payload.value > 0 ? 8 : -8;
     pct = evalToPct(s);
-    text = 'M' + Math.abs(payload.value);
-    if(payload.value < 0) text = '-' + text;
+    winner = payload.value > 0 ? 'white' : payload.value < 0 ? 'black' : '';
   } else if(payload?.type === 'cp'){
     pct = evalToPct(payload.value);
-    text = payload.value > 0 ? '+' + payload.value.toFixed(1) : payload.value.toFixed(1);
+    winner = payload.value > 0 ? 'white' : payload.value < 0 ? 'black' : '';
   }
   const mobile = window.matchMedia('(max-width: 768px)').matches;
   if(mobile){
@@ -2349,10 +3339,15 @@ function updateEvalUI(ui, payload){
     ui.marker.style.left = '0';
   }
   ui.text.textContent = text;
+  ui.top.textContent = winner === 'black' ? text : '';
+  ui.bottom.textContent = winner === 'white' || !winner ? text : '';
+  ui.bar.title = hoverText;
+  ui.top.title = hoverText;
+  ui.bottom.title = hoverText;
 }
 function queueEval(){ /* deprecated shim */ }
 function setEvalStatus(ui, text, isErr=false){
-  ui.state.textContent = text;
+  ui.state.textContent = isErr ? text : '';
   const ok = ['ready','ready (fallback)','cached','cached (fallback)','saved','saved (fallback)'].includes(text);
   ui.state.className = 'eval-state' + (ok ? ' ready' : '') + (isErr ? ' err' : '');
 }
@@ -2448,6 +3443,7 @@ function buildBlocks(blocks, container){
       const el=document.createElement('div');el.className='block block-line';
       const hdr=document.createElement('div');hdr.className='block-line-header';
       const lbl=document.createElement('span');lbl.className='block-line-label';lbl.textContent=block.label||'Line';hdr.appendChild(lbl);
+      const practiceBtn=document.createElement('button');practiceBtn.className='hbtn line-action-btn';practiceBtn.textContent='Practice';practiceBtn.onclick=()=>openPracticeSetup(block.moves||[], block.label||'Line');hdr.appendChild(practiceBtn);
       if(block.popularity){const pct=parseInt(block.popularity);const pw=document.createElement('div');pw.className='pop-wrap';pw.innerHTML=`<div class="pop-bar"><div class="pop-fill" style="width:${pct}%"></div></div><span class="pop-pct">${block.popularity}</span>`;hdr.appendChild(pw);}
       el.appendChild(hdr);const body=document.createElement('div');body.className='block-line-body';body.appendChild(buildLineWidget(block.moves||[]));el.appendChild(body);container.appendChild(el);
     } else if(block.type==='tabs'){
@@ -2934,11 +3930,19 @@ function buildMovesEditor(block){
   sanLabel.textContent='Moves (SAN updates automatically from board clicks)';
   wrap.appendChild(sanLabel);
 
+  const lineRow=el('div','editor-line-row');
   const sanBox=el('input','ed-input ed-mono');
   sanBox.value=(block.moves||[]).map(m=>m.san).filter(Boolean).join(' ');
   sanBox.placeholder='e4 c6 d4 d5 exd5 cxd5 c4 Nf6';
   sanBox.style.cssText='font-size:12px;letter-spacing:.03em;';
-  wrap.appendChild(sanBox);
+  lineRow.appendChild(sanBox);
+  const engineBox=el('div','engine-line-box');
+  const engineLabel=el('div','engine-line-label'); engineLabel.textContent='Engine line';
+  const engineValue=el('div','engine-line-value empty'); engineValue.textContent='Waiting for a valid position.';
+  engineBox.appendChild(engineLabel);
+  engineBox.appendChild(engineValue);
+  lineRow.appendChild(engineBox);
+  wrap.appendChild(lineRow);
 
   const cmtLabel=el('div','ed-label');
   cmtLabel.style.marginTop='4px';
@@ -2971,10 +3975,18 @@ function buildMovesEditor(block){
     const tokens=e.target.value.trim().split(/\s+/).filter(Boolean);
     const oldMoves=block.moves||[];
     block.moves=tokens.map((san,i)=>({ san, comment: oldMoves[i]?.comment||'' }));
+    engineValue.textContent = tokens.length ? 'Updating engine line…' : 'Waiting for a valid position.';
+    engineValue.classList.add('empty');
     refreshComments();
   };
 
-  wrap.appendChild(buildEditorBoardInput(block,sanBox,refreshComments));
+  function updateEngineLine(payload, fen){
+    const line = pvToSan(fen, payload?.pv || []);
+    engineValue.textContent = line || 'No principal variation yet.';
+    engineValue.classList.toggle('empty', !line);
+  }
+
+  wrap.appendChild(buildEditorBoardInput(block,sanBox,refreshComments,updateEngineLine));
   wrap.appendChild(cmtList);
   refreshComments();
   return wrap;
