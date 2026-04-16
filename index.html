@@ -94,6 +94,10 @@ main { padding: 36px 48px; max-width: 920px; }
 /* Blocks */
 .block { margin-bottom: 24px; }
 .block-text { font-size: 14px; line-height: 1.9; color: var(--text); max-width: 640px; }
+.block-text-wrap { position: relative; max-width: 640px; margin-bottom: 24px; }
+.tts-btn { position: absolute; top: 0; right: 0; background: var(--bg3); border: 1px solid var(--border); cursor: pointer; font-size: 13px; opacity: 1; transition: background .15s, border-color .15s; padding: 3px 8px; line-height: 1; border-radius: 3px; color: var(--muted); }
+.tts-btn:hover { background: var(--bg4); border-color: var(--border2); color: var(--text2); }
+.tts-btn.speaking { background: rgba(165,148,192,.15); border-color: var(--accent); color: var(--accent); }
 .block-text p  { margin-bottom: 12px; }
 .block-text p:last-child { margin-bottom: 0; }
 .block-text h2 { font-size: 16px; font-weight: 700; color: var(--text2); margin: 20px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 5px; letter-spacing: -.01em; }
@@ -3436,9 +3440,48 @@ function assignTabIds(blocks, nodeList){
 function buildBlocks(blocks, container){
   for(const block of blocks){
     if(block.type==='text'){
-      const el=document.createElement('div');el.className='block block-text';
-      el.innerHTML=renderMarkdown(block.content);
-      container.appendChild(el);
+      const wrap=document.createElement('div');wrap.className='block block-text-wrap';
+      const textEl=document.createElement('div');textEl.className='block-text';
+      textEl.innerHTML=renderMarkdown(block.content);
+      const ttsBtn=document.createElement('button');ttsBtn.className='tts-btn';ttsBtn.title='Read aloud';ttsBtn.textContent='🔊';
+      let utterance=null;
+      ttsBtn.onclick=()=>{
+        if(window.speechSynthesis.speaking){
+          window.speechSynthesis.cancel();
+          ttsBtn.textContent='🔊';
+          ttsBtn.classList.remove('speaking');
+          return;
+        }
+        const text=(block.content||'').replace(/[#*`_~]/g,'').replace(/\n+/g,' ').trim();
+        utterance=new SpeechSynthesisUtterance(text);
+        utterance.rate=0.92;
+        utterance.pitch=1.0;
+        // Pick best available voice — prefer neural/natural Google/Microsoft voices
+        const voices = window.speechSynthesis.getVoices();
+        const preferred = [
+          'Google UK English Female','Google UK English Male',
+          'Google US English','Microsoft Aria Online (Natural)',
+          'Microsoft Guy Online (Natural)','Microsoft Jenny Online (Natural)',
+          'Microsoft Zira','Microsoft David','Samantha','Karen','Daniel'
+        ];
+        let chosen = null;
+        for(const name of preferred){
+          chosen = voices.find(v => v.name === name);
+          if(chosen) break;
+        }
+        if(!chosen) chosen = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
+                          || voices.find(v => v.lang.startsWith('en'))
+                          || voices[0];
+        if(chosen) utterance.voice = chosen;
+        utterance.onend=()=>{ ttsBtn.textContent='🔊'; ttsBtn.classList.remove('speaking'); };
+        utterance.onerror=()=>{ ttsBtn.textContent='🔊'; ttsBtn.classList.remove('speaking'); };
+        ttsBtn.textContent='⏹';
+        ttsBtn.classList.add('speaking');
+        window.speechSynthesis.speak(utterance);
+      };
+      wrap.appendChild(textEl);
+      wrap.appendChild(ttsBtn);
+      container.appendChild(wrap);
     } else if(block.type==='line'){
       const el=document.createElement('div');el.className='block block-line';
       const hdr=document.createElement('div');hdr.className='block-line-header';
