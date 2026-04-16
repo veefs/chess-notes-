@@ -556,6 +556,11 @@ body.editor-page-open > .app,
 body.editor-page-open > footer {
   display: none !important;
 }
+body.brilliant-page-open > header,
+body.brilliant-page-open > .app,
+body.brilliant-page-open > footer {
+  display: none !important;
+}
 #editor-panel {
   position: fixed;
   inset: 0;
@@ -566,6 +571,30 @@ body.editor-page-open > footer {
   width: 100vw;
   height: 100vh;
   z-index: 1000;
+}
+#brilliant-panel {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+}
+.brilliant-page-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+.brilliant-page-card {
+  width: min(1320px, 100%);
+  margin: 0 auto;
 }
 .ed-head { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: var(--bg2); }
 .ed-head-title { font-size: 18px; font-weight: 700; color: var(--text2); flex: 1; }
@@ -790,6 +819,9 @@ body.editor-page-open > footer {
   .ed-board-shell .eval-wrap { height:auto; width:100%; }
   .practice-room .ed-board-shell {
     --board-input-size: min(calc(100vw - 100px), 420px);
+  }
+  .brilliant-page-body {
+    padding: 16px;
   }
 }
 
@@ -2277,17 +2309,39 @@ async function findBrilliantMovesFromPosition(moves, onProgress){
     .slice(0, BRILLIANT_MAX_RESULTS);
 }
 
+function closeBrilliantMoveFinder(){
+  document.body.classList.remove('brilliant-page-open');
+  document.getElementById('brilliant-panel')?.remove();
+  document.getElementById('brilliant-top-btn')?.classList.remove('active');
+}
+
 function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
-  const existing = document.getElementById('brilliant-finder-overlay');
+  if(edOpen) closeEd();
+  const existing = document.getElementById('brilliant-panel');
   if(existing) existing.remove();
 
-  const overlay = document.createElement('div');
-  overlay.id = 'brilliant-finder-overlay';
-  overlay.className = 'practice-overlay';
+  document.body.classList.add('brilliant-page-open');
+  document.getElementById('brilliant-top-btn')?.classList.add('active');
+
+  const panel = document.createElement('div');
+  panel.id = 'brilliant-panel';
+
+  const panelHead = document.createElement('div');
+  panelHead.className = 'ed-head';
+  panelHead.innerHTML = '<span class="ed-head-title">Brilliant Move Finder</span>';
+  const panelClose = document.createElement('button');
+  panelClose.className = 'ed-close';
+  panelClose.type = 'button';
+  panelClose.textContent = '✕';
+  panelClose.onclick = closeBrilliantMoveFinder;
+  panelHead.appendChild(panelClose);
+  panel.appendChild(panelHead);
+
+  const pageBody = document.createElement('div');
+  pageBody.className = 'brilliant-page-body';
 
   const card = document.createElement('div');
-  card.className = 'practice-card practice-room';
-  card.style.width = 'min(1200px, 100%)';
+  card.className = 'practice-card practice-room brilliant-page-card';
 
   const head = document.createElement('div');
   head.className = 'practice-room-head';
@@ -2298,7 +2352,7 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
   closeBtn.className = 'hbtn practice-close';
   closeBtn.type = 'button';
   closeBtn.textContent = 'Close';
-  closeBtn.onclick = () => overlay.remove();
+  closeBtn.onclick = closeBrilliantMoveFinder;
   head.appendChild(copy);
   head.appendChild(closeBtn);
   card.appendChild(head);
@@ -2459,9 +2513,9 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
     }
   };
 
-  overlay.appendChild(card);
-  overlay.addEventListener('click', ev => { if(ev.target === overlay) overlay.remove(); });
-  document.body.appendChild(overlay);
+  pageBody.appendChild(card);
+  panel.appendChild(pageBody);
+  document.body.appendChild(panel);
 }
 
 function buildLineWidget(moves){
