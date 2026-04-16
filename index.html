@@ -952,34 +952,47 @@ body.editor-page-open > footer {
 <header>
   <span class="site-title">♟ Open Source Theory</span>
   <span class="site-sub" id="json-filename">chess-notes.json</span>
+
   <button class="hbtn" id="home-btn">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 7L8 2l6 5v7a1 1 0 01-1 1H3a1 1 0 01-1-1z"/><polyline points="6 16 6 10 10 10 10 16"/></svg>
     Home
   </button>
+
   <button class="hbtn" id="contributors-btn">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="5" r="2.5"/><path d="M1 14c0-3 2-4.5 5-4.5s5 1.5 5 4.5"/><circle cx="12" cy="5" r="2"/><path d="M12 9.5c1.5 0 3 .8 3 3"/></svg>
     Contributors
   </button>
+
   <button class="hbtn" id="load-btn" title="Load JSON file">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3"/><polyline points="11 5 8 2 5 5"/><line x1="8" y1="2" x2="8" y2="10"/></svg>
     Load JSON
   </button>
+
   <button class="hbtn primary-btn" id="save-btn" title="Save JSON file">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6v7a1 1 0 001 1h10a1 1 0 001-1V6"/><polyline points="5 2 5 7 11 7 11 2"/><polyline points="11 2 14 2 14 6 2 6 2 2 5 2"/></svg>
     Save JSON
   </button>
+
   <button class="hbtn" id="new-btn">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
     New entry
   </button>
+
   <button class="hbtn" id="toggle-btn">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1.5"/><line x1="5" y1="6.5" x2="11" y2="6.5"/><line x1="5" y1="9.5" x2="9" y2="9.5"/></svg>
     Editor
   </button>
+
   <button class="hbtn" id="map-btn">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="8" cy="8" r="2"/><line x1="6" y1="4" x2="10" y2="4"/><line x1="4" y1="6" x2="4" y2="10"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="5.5" y1="5.5" x2="6.5" y2="6.5"/><line x1="9.5" y1="6.5" x2="10.5" y2="5.5"/></svg>
     Map
   </button>
+
+  <!-- ✅ PLAY BOT BUTTON -->
+  <button class="hbtn" id="play-bot-btn">
+    ♟ Play Bot
+  </button>
+
 </header>
 
 <div class="app" id="app">
@@ -992,6 +1005,9 @@ body.editor-page-open > footer {
   <span id="entry-count">0 entries</span>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+
+
 <div id="map-overlay">
   <div id="map-header">
     <span id="map-title">♟ Theory Map</span>
@@ -1873,7 +1889,7 @@ function buildLineWidget(moves){
         from: { r: 8 - parseInt(res.from[1],10), f: res.from.charCodeAt(0) - 97 },
         to:   { r: 8 - parseInt(res.to[1],10),   f: res.to.charCodeAt(0) - 97 },
         san: mv.san,
-        turn: before,
+        turn: game.turn(),
         comment: mv.comment || '',
         fen: game.fen(),
         checkSquare: checkedKingSquareFromGame(game)
@@ -2067,8 +2083,8 @@ function buildLineWidget(moves){
 
 
 // ─── Eval / Stockfish ───────────────────────────────────────────────
-const STOCKFISH_WASM_URL = 'https://cdn.jsdelivr.net/npm/stockfish@18.0.7/bin/stockfish-18-lite-single.js';
-const STOCKFISH_ASM_URL = 'https://cdn.jsdelivr.net/npm/stockfish@18.0.7/bin/stockfish-18-asm.js';
+const STOCKFISH_WASM_URL = 'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js';
+const STOCKFISH_ASM_URL = 'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.js';
 const ENGINE = {
   worker: null,
   ready: false,
@@ -2107,43 +2123,51 @@ function bootEngine(url, mode){
   resetEngineState();
   ENGINE.mode = mode;
 
+  const queued = ENGINE.queue[ENGINE.queue.length - 1];
+  if(queued?.onStatus) queued.onStatus(mode === 'wasm' ? 'loading engine' : 'loading fallback');
+
+  // Use importScripts blob trick — works on file://, GitHub Pages, and all static hosts
+  // A tiny inline worker fetches and runs the engine script via importScripts
+  const workerCode = `self.importScripts(${JSON.stringify(url)});`;
+  let blobUrl;
   try {
-    ENGINE.worker = new Worker(url);
-    ENGINE.worker.onmessage = e => handleEngineMsg(typeof e.data === 'string' ? e.data : '');
-    ENGINE.worker.onerror = () => {
-      if(mode !== 'asm'){
-        const queued = ENGINE.queue[ENGINE.queue.length - 1];
-        if(queued?.onStatus) queued.onStatus('wasm failed, falling back');
-        bootEngine(STOCKFISH_ASM_URL, 'asm');
-        return;
-      }
-      ENGINE.ready = false;
-      const queued = ENGINE.current || ENGINE.queue[ENGINE.queue.length - 1];
-      if(queued?.onStatus) queued.onStatus('engine error');
-    };
-
-    if(ENGINE.bootTimer) clearTimeout(ENGINE.bootTimer);
-    ENGINE.bootTimer = setTimeout(() => {
-      if(!ENGINE.ready && mode !== 'asm'){
-        const queued = ENGINE.current || ENGINE.queue[ENGINE.queue.length - 1];
-        if(queued?.onStatus) queued.onStatus('engine fallback');
-        bootEngine(STOCKFISH_ASM_URL, 'asm');
-      }
-    }, 7000);
-
-    const queued = ENGINE.queue[ENGINE.queue.length - 1];
-    if(queued?.onStatus) queued.onStatus(mode === 'wasm' ? 'loading engine' : 'loading fallback');
-
-    ENGINE.worker.postMessage('uci');
+    blobUrl = URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' }));
+    ENGINE.worker = new Worker(blobUrl);
+    URL.revokeObjectURL(blobUrl);
   } catch(err) {
     if(mode !== 'asm'){
       bootEngine(STOCKFISH_ASM_URL, 'asm');
       return;
     }
     ENGINE.ready = false;
-    const queued = ENGINE.current || ENGINE.queue[ENGINE.queue.length - 1];
-    if(queued?.onStatus) queued.onStatus('engine unavailable');
+    const q = ENGINE.current || ENGINE.queue[ENGINE.queue.length - 1];
+    if(q?.onStatus) q.onStatus('engine unavailable');
+    return;
   }
+
+  ENGINE.worker.onmessage = e => handleEngineMsg(typeof e.data === 'string' ? e.data : '');
+  ENGINE.worker.onerror = () => {
+    if(mode !== 'asm'){
+      const q = ENGINE.queue[ENGINE.queue.length - 1];
+      if(q?.onStatus) q.onStatus('wasm failed, falling back');
+      bootEngine(STOCKFISH_ASM_URL, 'asm');
+      return;
+    }
+    ENGINE.ready = false;
+    const q = ENGINE.current || ENGINE.queue[ENGINE.queue.length - 1];
+    if(q?.onStatus) q.onStatus('engine error');
+  };
+
+  if(ENGINE.bootTimer) clearTimeout(ENGINE.bootTimer);
+  ENGINE.bootTimer = setTimeout(() => {
+    if(!ENGINE.ready && mode !== 'asm'){
+      const q = ENGINE.current || ENGINE.queue[ENGINE.queue.length - 1];
+      if(q?.onStatus) q.onStatus('engine fallback');
+      bootEngine(STOCKFISH_ASM_URL, 'asm');
+    }
+  }, 7000);
+
+  ENGINE.worker.postMessage('uci');
 }
 
 function initEngine(){
@@ -2222,13 +2246,15 @@ function handleEngineMsg(line){
     const mate = line.match(/score mate (-?\d+)/);
     if(mate){
       const raw = parseInt(mate[1], 10);
-      const signed = job.turn === 'w' ? raw : -raw;
+      // FEN encodes side to move — Stockfish score is from side-to-move's perspective
+      // job.turn is stored as the side AFTER the move (side to move in the position)
+      const signed = job.turn === 'b' ? -raw : raw;
       payload = { type:'mate', value:signed };
     } else {
       const cp = line.match(/score cp (-?\d+)/);
       if(cp){
         const raw = parseInt(cp[1], 10) / 100;
-        const signed = job.turn === 'w' ? raw : -raw;
+        const signed = job.turn === 'b' ? -raw : raw;
         payload = { type:'cp', value:signed };
       }
     }
