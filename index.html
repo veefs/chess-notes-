@@ -2071,10 +2071,9 @@ function analyzeFenPromise(fen, turn, depth = 18, options = {}){
   });
 }
 
-const BRILLIANT_SCAN_DEPTH = 10;
-const BRILLIANT_CONFIRM_DEPTH = 14;
-const BRILLIANT_REPLY_DEPTH = 10;
-const BRILLIANT_ENGINE_LINE_PLIES = 20;
+const BRILLIANT_SCAN_DEPTH = 12;
+const BRILLIANT_CONFIRM_DEPTH = 20;
+const BRILLIANT_REPLY_DEPTH = 20;
 const BRILLIANT_NEAR_BEST_CP = 45;
 const BRILLIANT_STABILITY_CP = 70;
 const BRILLIANT_REPLY_DROP_CP = 110;
@@ -2332,47 +2331,18 @@ async function findBrilliantMovesFromPosition(moves, onProgress){
   const start = states[states.length - 1];
   if(!start?.fen) return [];
 
-  let frontierGame = cloneGameFromFen(start.fen);
-  if(!frontierGame) return [];
+  const rootEval = await analyzeFenPromise(start.fen, start.turn, BRILLIANT_CONFIRM_DEPTH, { forceFresh:true });
+  if(!rootEval) return [];
 
-  const findings = [];
-  const enginePath = [];
-
-  for(let frontierIndex = 0; frontierIndex < BRILLIANT_ENGINE_LINE_PLIES; frontierIndex++){
-    const frontierFen = frontierGame.fen();
-    const frontierTurn = frontierGame.turn();
-    const frontierBoard = boardFromChessJs(frontierGame);
-
-    if(typeof onProgress === 'function') onProgress({
-      stage:'frontier',
-      frontierIndex,
-      total:BRILLIANT_ENGINE_LINE_PLIES,
-      path:enginePath.slice()
-    });
-
-    const rootEval = await analyzeFenPromise(frontierFen, frontierTurn, BRILLIANT_CONFIRM_DEPTH, { forceFresh:true });
-    if(!rootEval) break;
-
-    const positionFindings = await findBrilliantCandidatesAtPosition({
-      fen: frontierFen,
-      turn: frontierTurn,
-      board: frontierBoard,
-      path: enginePath.slice()
-    }, rootEval, onProgress, frontierIndex);
-    findings.push(...positionFindings);
-
-    const nextUci = Array.isArray(rootEval.pv) ? rootEval.pv[0] : '';
-    if(!nextUci) break;
-
-    const applied = applyUciMove(frontierGame, nextUci);
-    if(!applied?.san) break;
-    enginePath.push(applied.san);
-
-    if(frontierGame.game_over && frontierGame.game_over()) break;
-  }
+  const findings = await findBrilliantCandidatesAtPosition({
+    fen: start.fen,
+    turn: start.turn,
+    board: start.board,
+    path: []
+  }, rootEval, onProgress, 0);
 
   return findings
-    .sort((a, b) => (a.pathPly - b.pathPly) || (a.bestGap - b.bestGap) || (b.sacValue - a.sacValue) || (b.score - a.score))
+    .sort((a, b) => (a.bestGap - b.bestGap) || (b.sacValue - a.sacValue) || (b.score - a.score))
     .slice(0, BRILLIANT_MAX_RESULTS);
 }
 
@@ -2414,7 +2384,7 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
   head.className = 'practice-room-head';
   const copy = document.createElement('div');
   copy.className = 'practice-room-copy';
-  copy.innerHTML = `<div class="practice-room-title">Brilliant Move Finder</div><div class="practice-room-sub">Build a starting position for <strong>${esc(label)}</strong>, then scan every legal move from that position. If the current position has no candidate, the finder keeps following the engine line and re-checks later positions instead of stopping early.</div>`;
+  copy.innerHTML = `<div class="practice-room-title">Brilliant Move Finder</div><div class="practice-room-sub">Build a starting position for <strong>${esc(label)}</strong>, then scan every legal move from that position. The finder now spends the extra depth inside each candidate and every legal reply instead of walking forward through unrelated engine-line positions.</div>`;
   const closeBtn = document.createElement('button');
   closeBtn.className = 'hbtn practice-close';
   closeBtn.type = 'button';
@@ -2580,11 +2550,6 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
     try {
       const baseMoves = (block.moves || []).map(move => move.san).filter(Boolean);
       const findings = await findBrilliantMovesFromPosition(block.moves || [], progress => {
-        if(progress.stage === 'frontier') {
-          const prefix = (progress.path || []).length ? ` after ${progress.path.join(' ')}` : '';
-          status.textContent = `Following engine line ply ${progress.frontierIndex + 1} of ${progress.total}${prefix}`;
-          return;
-        }
         if(progress.stage === 'moves') {
           status.textContent = `Checking legal move ${progress.current} of ${progress.total}: ${progress.san}`;
           return;
