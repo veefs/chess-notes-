@@ -2074,10 +2074,11 @@ function analyzeFenPromise(fen, turn, depth = 18, options = {}){
 const BRILLIANT_SCAN_DEPTH = 12;
 const BRILLIANT_CONFIRM_DEPTH = 20;
 const BRILLIANT_REPLY_DEPTH = 20;
-const BRILLIANT_NEAR_BEST_CP = 45;
-const BRILLIANT_STABILITY_CP = 70;
-const BRILLIANT_REPLY_DROP_CP = 110;
-const BRILLIANT_ALREADY_WINNING_CP = 500;
+const BRILLIANT_NEAR_BEST_CP = 30;
+const BRILLIANT_STABILITY_CP = 45;
+const BRILLIANT_REPLY_DROP_CP = 60;
+const BRILLIANT_ALREADY_WINNING_CP = 350;
+const BRILLIANT_NOT_BAD_AFTER_CP = -40;
 const BRILLIANT_MAX_RESULTS = 8;
 const BRILLIANT_MAX_SHORTLIST = 10;
 
@@ -2187,6 +2188,28 @@ function brilliantReasonFromSacrifice(sacValue){
   return 'Material investment';
 }
 
+function classifySacrificeCandidate(startBoard, res, mover, postMoveReplies){
+  const enemyColor = mover === 'w' ? 'b' : 'w';
+  const movedPieceValue = pieceValue(startBoard?.[8 - parseInt(res.from[1], 10)]?.[res.from.charCodeAt(0) - 97]);
+  const capturedValue = pieceValue(res.captured);
+  const toCoords = squareToCoords(res.to);
+  const destinationDefended = isSquareDefendedByBoard(startBoard, toCoords.r, toCoords.f, enemyColor);
+  const capturedWasHanging = capturedValue > 0 && !destinationDefended;
+  const recaptureExists = (postMoveReplies || []).some(reply => reply.captured && reply.to === res.to);
+  const quietOfferValue = !capturedValue && destinationDefended && recaptureExists ? movedPieceValue : 0;
+  const apparentSacValue = destinationDefended && recaptureExists && movedPieceValue > capturedValue ? (movedPieceValue - capturedValue) : 0;
+  const sacValue = Math.max(quietOfferValue, apparentSacValue);
+
+  return {
+    movedPieceValue,
+    capturedValue,
+    capturedWasHanging,
+    recaptureExists,
+    sacValue,
+    reason: quietOfferValue > apparentSacValue ? brilliantReasonFromSacrifice(quietOfferValue) : brilliantReasonFromSacrifice(apparentSacValue || quietOfferValue)
+  };
+}
+
 async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, frontierIndex){
   const rootGame = cloneGameFromFen(start.fen);
   if(!rootGame) return [];
@@ -2215,20 +2238,10 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     const res = nextGame.move(moveSpecFromVerbose(move));
     if(!res) continue;
 
-    const afterBoard = boardFromChessJs(nextGame);
-    const immediateSacValue = Math.max(0, materialSwingForMove(start.board, afterBoard, mover));
-    const movedPieceValue = pieceValue(start.board?.[8 - parseInt(res.from[1], 10)]?.[res.from.charCodeAt(0) - 97]);
-    const capturedValue = pieceValue(res.captured);
-    const enemyColor = mover === 'w' ? 'b' : 'w';
-    const toCoords = squareToCoords(res.to);
-    const capturedWasHanging = capturedValue > 0 && !isSquareDefendedByBoard(start.board, toCoords.r, toCoords.f, enemyColor);
     const postMoveReplies = nextGame.moves({ verbose:true }) || [];
-    const recaptureExists = postMoveReplies.some(reply => reply.captured && reply.to === res.to);
-    const apparentSacValue = recaptureExists && movedPieceValue > capturedValue ? (movedPieceValue - capturedValue) : 0;
-    const sacValue = Math.max(immediateSacValue, apparentSacValue);
-    const tacticalMove = !!res.captured || /\+|#/.test(res.san || '') || apparentSacValue > 0;
-    if(sacValue < 1 && !tacticalMove) continue;
-    if(capturedWasHanging) continue;
+    const sac = classifySacrificeCandidate(start.board, res, mover, postMoveReplies);
+    if(sac.sacValue < 1) continue;
+    if(sac.capturedWasHanging) continue;
 
     const shallowEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_SCAN_DEPTH);
     const shallowScore = scoreForMover(payloadToCp(shallowEval), mover);
@@ -2243,13 +2256,13 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     candidates.push({
       san: res.san,
       uci: uciFromMoveResult(res),
-      sacValue,
+      sacValue: sac.sacValue,
       shallowScore,
       deepScore,
       stability: (shallowScore == null || deepScore == null) ? null : Math.abs(deepScore - shallowScore),
       pvSan: pvToSan(nextGame.fen(), deepEval?.pv || [], 8),
       afterFen: nextGame.fen(),
-      reason: apparentSacValue > immediateSacValue ? `Apparent ${brilliantReasonFromSacrifice(apparentSacValue).toLowerCase()}` : brilliantReasonFromSacrifice(sacValue)
+      reason: res.captured ? `Apparent ${sac.reason.toLowerCase()}` : sac.reason
     });
   }
 
@@ -2290,7 +2303,7 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
       const replyRes = replyState.move(moveSpecFromVerbose(reply));
       if(!replyRes) continue;
 
-      const replyEval = await analyzeFenPromise(replyState.fen(), replyState.turn(), BRILLIANT_REPLY_DEPTH);
+      const replyEval = await analyzeFenPromise(replyState.fen(), replyState.turn(), BRILLIANT_REPLY_DEPTH, { forceFresh:true });
       const replyScore = scoreForMover(payloadToCp(replyEval), mover);
       if(replyScore == null) continue;
       if(replyScore < worstReplyScore){
@@ -2302,8 +2315,10 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     const notAlreadyWinning = rootScore == null ? true : rootScore < BRILLIANT_ALREADY_WINNING_CP;
     const stableEnough = candidate.stability == null || candidate.stability <= BRILLIANT_STABILITY_CP;
     const replyHolds = worstReplyScore >= candidate.deepScore - BRILLIANT_REPLY_DROP_CP;
+    const notBadAfterMove = worstReplyScore >= BRILLIANT_NOT_BAD_AFTER_CP;
+    const stillNearBestAfterDefense = rootScore == null ? true : worstReplyScore >= rootScore - BRILLIANT_NEAR_BEST_CP;
 
-    if(notAlreadyWinning && stableEnough && replyHolds){
+    if(notAlreadyWinning && stableEnough && replyHolds && notBadAfterMove && stillNearBestAfterDefense){
       findings.push({
         path: (start.path || []).slice(),
         pathPly: frontierIndex,
