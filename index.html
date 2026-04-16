@@ -820,6 +820,20 @@ body.editor-page-open > footer {
 .eval-bar { position: relative; width: 22px; height: calc(var(--sq) * 8); background: #ece9e3; border: 1px solid var(--border2); border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
 .eval-black { position: absolute; inset: 0 0 auto 0; height: 50%; background: #111010; transition: height .18s ease; }
 .eval-marker { position: absolute; left: 0; width: 100%; height: 2px; background: var(--accent); top: 50%; transform: translateY(-1px); pointer-events: none; opacity: .9; }
+.eval-score {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+  text-shadow: 0 1px 2px rgba(0,0,0,.45);
+}
+.eval-score.top { top: 8px; color: #f3f0ea; }
+.eval-score.bottom { bottom: 8px; color: #111010; text-shadow: none; }
 .eval-meta { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .eval-text { font-size: 12px; color: var(--text2); font-family: 'JetBrains Mono', monospace; font-weight: 600; min-height: 16px; }
 .eval-state { font-size: 10px; color: var(--muted2); text-transform: uppercase; letter-spacing: .08em; }
@@ -841,6 +855,14 @@ body.editor-page-open > footer {
   .eval-bar { width: 100%; height: 14px; }
   .eval-black { inset: 0 auto 0 0; width: 50%; height: 100%; transition: width .18s ease; }
   .eval-marker { top: 0; left: 50%; width: 2px; height: 100%; transform: translateX(-1px); }
+  .eval-score.top,
+  .eval-score.bottom {
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+  .eval-score.top { left: 10px; color: #f3f0ea; }
+  .eval-score.bottom { left: auto; right: 10px; color: #111010; }
   .eval-meta { flex-direction: row; justify-content: space-between; width: 100%; }
   .board-wrap { width: 100%; }
   .board-coords { grid-template-columns: 14px calc(var(--sq)*8); grid-template-rows: calc(var(--sq)*8) 14px; }
@@ -1644,7 +1666,7 @@ function buildEditorBoardInput(block,sanBox,refreshComments){
     evalTimer = setTimeout(()=>{
       const state = stateFromMoves();
       const fen = state.fen || (boardOnlyFen(board)+' '+turn+' - - 0 1');
-      requestEval(fen, turn, payload=>updateEvalUI(evalUi, payload), txt=>setEvalStatus(evalUi, txt), 12);
+      requestEval(fen, turn, payload=>updateEvalUI(evalUi, payload), txt=>setEvalStatus(evalUi, txt), 18);
     }, 150);
   }
 
@@ -1904,6 +1926,12 @@ function buildLineWidget(moves){
   const evalBar = el('div','eval-bar');
   const evalBlack = el('div','eval-black');
   const evalMarker = el('div','eval-marker');
+  const evalTop = el('div','eval-score top');
+  const evalBottom = el('div','eval-score bottom');
+  evalTop.textContent = '';
+  evalBottom.textContent = '0.0';
+  evalBar.appendChild(evalTop);
+  evalBar.appendChild(evalBottom);
   evalBar.appendChild(evalBlack);
   evalBar.appendChild(evalMarker);
   const evalMeta = el('div','eval-meta');
@@ -1915,7 +1943,7 @@ function buildLineWidget(moves){
   evalWrap.appendChild(evalMeta);
   evalShell.appendChild(evalWrap);
 
-  const evalUi = { black: evalBlack, marker: evalMarker, text: evalText, state: evalState };
+  const evalUi = { bar: evalBar, black: evalBlack, marker: evalMarker, text: evalText, state: evalState, top: evalTop, bottom: evalBottom };
 
   const bw = el('div','board-wrap');
   const coords = el('div','board-coords');
@@ -2059,7 +2087,7 @@ function buildLineWidget(moves){
           s.turn,
           payload => updateEvalUI(evalUi, payload),
           txt => setEvalStatus(evalUi, txt),
-          12
+          18
         );
       } catch(_) {}
     }
@@ -2100,7 +2128,9 @@ const ENGINE = {
   lastFen: '',
 };
 
-const ENGINE_SEARCH_MS = 1800;
+const ENGINE_SEARCH_MS = 5000;
+const ENGINE_HARD_TIMEOUT_MS = 6500;
+const ENGINE_PV_CACHE_PLY = 16;
 
 function resetEngineState(){
   ENGINE.ready = false;
@@ -2190,6 +2220,35 @@ function finishCurrentSearch(finalStatus){
   ENGINE.current = null;
 }
 
+function cloneEvalPayload(payload){
+  return payload ? { type: payload.type, value: payload.value } : null;
+}
+
+function applyUciMove(chess, uci){
+  if(!uci || uci === '(none)' || uci.length < 4) return null;
+  return chess.move({
+    from: uci.slice(0,2),
+    to: uci.slice(2,4),
+    promotion: uci[4] || undefined,
+  });
+}
+
+function cachePrincipalVariation(job, payload, pvMoves){
+  if(!payload || !Array.isArray(pvMoves) || !pvMoves.length || typeof Chess !== 'function') return;
+
+  let chess;
+  try {
+    chess = new Chess(job.fen);
+  } catch(_) {
+    return;
+  }
+
+  for(const uci of pvMoves.slice(0, ENGINE_PV_CACHE_PLY)){
+    if(!applyUciMove(chess, uci)) break;
+    ENGINE.cache.set(chess.fen(), cloneEvalPayload(payload));
+  }
+}
+
 function beginTimedSearch(job){
   if(!ENGINE.worker) return;
   if(ENGINE.searchTimer){
@@ -2197,14 +2256,16 @@ function beginTimedSearch(job){
     ENGINE.searchTimer = null;
   }
 
+  job.bestPv = [];
+  job.lastPayload = null;
   job.onStatus('thinking');
   ENGINE.worker.postMessage('stop');
   ENGINE.worker.postMessage('position fen ' + job.fen);
-  ENGINE.worker.postMessage('go infinite');
+  ENGINE.worker.postMessage('go movetime ' + (job.thinkMs || ENGINE_SEARCH_MS));
 
   ENGINE.searchTimer = setTimeout(() => {
     finishCurrentSearch(ENGINE.mode === 'asm' ? 'saved (fallback)' : 'saved');
-  }, ENGINE_SEARCH_MS);
+  }, ENGINE_HARD_TIMEOUT_MS);
 }
 
 function handleEngineMsg(line){
@@ -2232,6 +2293,11 @@ function handleEngineMsg(line){
   }
 
   if(line.startsWith('bestmove')){
+    const bestmove = line.match(/^bestmove\s+(\S+)/);
+    if(bestmove && ENGINE.current?.lastPayload){
+      const pv = ENGINE.current.bestPv?.length ? ENGINE.current.bestPv : [bestmove[1]];
+      cachePrincipalVariation(ENGINE.current, ENGINE.current.lastPayload, pv);
+    }
     finishCurrentSearch(ENGINE.mode === 'asm' ? 'saved (fallback)' : 'saved');
     flushEngineQueue();
     return;
@@ -2260,7 +2326,11 @@ function handleEngineMsg(line){
     }
 
     if(payload){
-      ENGINE.cache.set(job.fen, payload);
+      const pvMatch = line.match(/\spv\s+(.+)$/);
+      job.bestPv = pvMatch ? pvMatch[1].trim().split(/\s+/).filter(Boolean) : job.bestPv;
+      job.lastPayload = cloneEvalPayload(payload);
+      ENGINE.cache.set(job.fen, cloneEvalPayload(payload));
+      cachePrincipalVariation(job, payload, job.bestPv);
       job.onEval(payload);
     }
   }
@@ -2281,7 +2351,7 @@ function flushEngineQueue(){
   beginTimedSearch(job);
 }
 
-function requestEval(fen, turn, onEval, onStatus, depth=12){
+function requestEval(fen, turn, onEval, onStatus, depth=18){
   if(ENGINE.cache.has(fen)){
     onEval(ENGINE.cache.get(fen));
     onStatus(ENGINE.mode === 'asm' ? 'cached (fallback)' : 'cached');
@@ -2290,7 +2360,7 @@ function requestEval(fen, turn, onEval, onStatus, depth=12){
 
   initEngine();
 
-  const job = { id: ++ENGINE.latestJob, fen, turn, onEval, onStatus, depth };
+  const job = { id: ++ENGINE.latestJob, fen, turn, onEval, onStatus, depth, thinkMs: ENGINE_SEARCH_MS };
   ENGINE.queue.push(job);
 
   if(!ENGINE.uciOk || !ENGINE.ready){
@@ -2305,6 +2375,24 @@ function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
 function evalToPct(score){
   const capped = clamp(score, -8, 8);
   return 50 - (capped / 8) * 50;
+}
+function formatEvalHover(payload){
+  if(payload?.type === 'mate'){
+    const sign = payload.value > 0 ? '+' : payload.value < 0 ? '-' : '';
+    return sign + 'm' + Math.abs(payload.value);
+  }
+  if(payload?.type === 'cp'){
+    const val = Math.abs(payload.value).toFixed(1);
+    if(payload.value > 0) return '+' + val;
+    if(payload.value < 0) return '-' + val;
+    return '0.0';
+  }
+  return '0.0';
+}
+function formatEvalDisplay(payload){
+  if(payload?.type === 'mate') return 'm' + Math.abs(payload.value);
+  if(payload?.type === 'cp') return Math.abs(payload.value).toFixed(1);
+  return '0.0';
 }
 function boardOnlyFen(board){
   return board.map(row=>{
@@ -2326,15 +2414,16 @@ function stateFen(state){
 }
 function updateEvalUI(ui, payload){
   let pct = 50;
-  let text = '0.0';
+  const text = formatEvalDisplay(payload);
+  const hoverText = formatEvalHover(payload);
+  let winner = '';
   if(payload?.type === 'mate'){
     const s = payload.value > 0 ? 8 : -8;
     pct = evalToPct(s);
-    text = 'M' + Math.abs(payload.value);
-    if(payload.value < 0) text = '-' + text;
+    winner = payload.value > 0 ? 'white' : payload.value < 0 ? 'black' : '';
   } else if(payload?.type === 'cp'){
     pct = evalToPct(payload.value);
-    text = payload.value > 0 ? '+' + payload.value.toFixed(1) : payload.value.toFixed(1);
+    winner = payload.value > 0 ? 'white' : payload.value < 0 ? 'black' : '';
   }
   const mobile = window.matchMedia('(max-width: 768px)').matches;
   if(mobile){
@@ -2349,6 +2438,11 @@ function updateEvalUI(ui, payload){
     ui.marker.style.left = '0';
   }
   ui.text.textContent = text;
+  ui.top.textContent = winner === 'black' ? text : '';
+  ui.bottom.textContent = winner === 'white' || !winner ? text : '';
+  ui.bar.title = hoverText;
+  ui.top.title = hoverText;
+  ui.bottom.title = hoverText;
 }
 function queueEval(){ /* deprecated shim */ }
 function setEvalStatus(ui, text, isErr=false){
