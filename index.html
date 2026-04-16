@@ -2302,12 +2302,12 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
   const engineTurn = userColor === 'w' ? 'b' : 'w';
   const PRACTICE_MIN_ELO = 100;
   const PRACTICE_MAX_ELO = 3200;
-  const practiceDepthFromElo = elo => Math.max(1, Math.min(40, Math.round(1 + ((elo - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO)) * 39)));
+  const practiceDepthFromElo = elo => Math.max(1, Math.min(18, Math.round(1 + ((elo - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO)) * 17)));
   const practiceSkillFromElo = elo => Math.max(0, Math.min(20, Math.round(((elo - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO)) * 20)));
-  const practiceThinkMsFromElo = elo => Math.round(350 + ((elo - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO)) * 5650);
+  const practiceThinkMsFromElo = elo => Math.round(200 + ((elo - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO)) * 1600);
   const practiceMultiPvFromElo = elo => {
     const weakness = 1 - ((Math.max(PRACTICE_MIN_ELO, Math.min(PRACTICE_MAX_ELO, elo)) - PRACTICE_MIN_ELO) / (PRACTICE_MAX_ELO - PRACTICE_MIN_ELO));
-    return weakness > 0.8 ? 8 : weakness > 0.6 ? 6 : weakness > 0.35 ? 4 : 2;
+    return weakness > 0.8 ? 4 : weakness > 0.6 ? 3 : weakness > 0.35 ? 2 : 1;
   };
 
   const layout = el('div','study-layout');
@@ -2395,7 +2395,7 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
   function renderPracticeStrength(){
     const depth = practiceDepthFromElo(practiceElo);
     strengthValue.textContent = `${practiceElo} Elo`;
-    strengthHint.textContent = `Depth ${depth} search. 3200 aims for depth 40, while 100 only looks 1 move deep and will miss stronger replies.`;
+    strengthHint.textContent = `Fast response mode. 3200 still searches deeper, but move time is capped so strong practice stays snappy.`;
   }
 
   function clearPromotionOverlay(){
@@ -3116,11 +3116,7 @@ function beginTimedSearch(job){
   ENGINE.worker.postMessage('stop');
   configureEngineForJob(job);
   ENGINE.worker.postMessage('position fen ' + job.fen);
-  if(job.kind === 'move' && job.depth){
-    ENGINE.worker.postMessage('go depth ' + job.depth);
-  } else {
-    ENGINE.worker.postMessage('go movetime ' + (job.thinkMs || ENGINE_SEARCH_MS));
-  }
+  ENGINE.worker.postMessage('go movetime ' + (job.thinkMs || ENGINE_SEARCH_MS));
 
   ENGINE.searchTimer = setTimeout(() => {
     finishCurrentSearch(ENGINE.mode === 'asm' ? 'saved (fallback)' : 'saved');
