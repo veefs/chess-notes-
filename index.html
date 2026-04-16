@@ -2039,10 +2039,10 @@ function analyzeFenPromise(fen, turn, depth = 18, options = {}){
   });
 }
 
-const BRILLIANT_SCAN_DEPTH = 12;
-const BRILLIANT_CONFIRM_DEPTH = 16;
-const BRILLIANT_REPLY_DEPTH = 12;
-const BRILLIANT_ENGINE_LINE_PLIES = 5;
+const BRILLIANT_SCAN_DEPTH = 10;
+const BRILLIANT_CONFIRM_DEPTH = 14;
+const BRILLIANT_REPLY_DEPTH = 10;
+const BRILLIANT_ENGINE_LINE_PLIES = 4;
 const BRILLIANT_NEAR_BEST_CP = 45;
 const BRILLIANT_STABILITY_CP = 70;
 const BRILLIANT_REPLY_DROP_CP = 110;
@@ -2073,6 +2073,13 @@ function moveSpecFromVerbose(move){
     to: move.to,
     promotion: move.promotion || undefined
   };
+}
+
+function pieceValue(piece){
+  if(!piece) return 0;
+  const values = { P:1, N:3, B:3, R:5, Q:9, K:0 };
+  const key = String(piece).toUpperCase().slice(-1);
+  return values[key] || 0;
 }
 
 function materialSwingForMove(beforeBoard, afterBoard, mover){
@@ -2115,8 +2122,15 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     if(!res) continue;
 
     const afterBoard = boardFromChessJs(nextGame);
-    const sacValue = materialSwingForMove(start.board, afterBoard, mover);
-    if(sacValue < 1) continue;
+    const immediateSacValue = Math.max(0, materialSwingForMove(start.board, afterBoard, mover));
+    const movedPieceValue = pieceValue(start.board?.[8 - parseInt(res.from[1], 10)]?.[res.from.charCodeAt(0) - 97]);
+    const capturedValue = pieceValue(res.captured);
+    const postMoveReplies = nextGame.moves({ verbose:true }) || [];
+    const recaptureExists = postMoveReplies.some(reply => reply.captured && reply.to === res.to);
+    const apparentSacValue = recaptureExists ? Math.max(0, movedPieceValue - capturedValue) : 0;
+    const sacValue = Math.max(immediateSacValue, apparentSacValue);
+    const tacticalMove = !!res.captured || /\+|#/.test(res.san || '') || apparentSacValue > 0;
+    if(sacValue < 1 && !tacticalMove) continue;
 
     const shallowEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_SCAN_DEPTH);
     const shallowScore = scoreForMover(payloadToCp(shallowEval), mover);
@@ -2137,7 +2151,7 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
       stability: (shallowScore == null || deepScore == null) ? null : Math.abs(deepScore - shallowScore),
       pvSan: pvToSan(nextGame.fen(), deepEval?.pv || [], 8),
       afterFen: nextGame.fen(),
-      reason: brilliantReasonFromSacrifice(sacValue)
+      reason: apparentSacValue > immediateSacValue ? `Apparent ${brilliantReasonFromSacrifice(apparentSacValue).toLowerCase()}` : brilliantReasonFromSacrifice(sacValue)
     });
   }
 
