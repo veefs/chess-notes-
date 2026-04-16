@@ -1117,9 +1117,12 @@ body.editor-page-open > footer {
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
         <div>
           <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);font-weight:600;margin-bottom:8px;">ECO List</div>
-          <div style="font-size:13px;color:var(--muted);line-height:1.7;max-width:560px;">ECO codes, opening names, and move lists in a searchable reference panel.</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.7;max-width:560px;">ECO codes, opening names, and move lists you can turn into full theory entries.</div>
         </div>
-        <button id="eco-reload-btn" class="hbtn" type="button" style="font-size:12px;">Reload ECO</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="eco-import-btn" class="hbtn primary-btn" type="button" style="font-size:12px;">Import ECO Entries</button>
+          <button id="eco-reload-btn" class="hbtn" type="button" style="font-size:12px;">Reload ECO</button>
+        </div>
       </div>
       <div style="margin-bottom:14px;">
         <input id="eco-search" type="search" placeholder="Search ECO code, opening, or move order" style="width:100%;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);font:inherit;">
@@ -3476,6 +3479,167 @@ function createEntryFromLine(entry, block){
   toast('New entry created from line','ok');
 }
 
+function ecoMovesToSavedLine(movesText){
+  const cleaned = String(movesText || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\{[^}]*\}/g, ' ')
+    .replace(/\b\d+\.(\.\.)?/g, ' ')
+    .replace(/\b(1-0|0-1|1\/2-1\/2|\*)\b/g, ' ')
+    .replace(/[;,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const tokens = cleaned.split(' ').filter(Boolean).filter(token => /^(O-O(-O)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](=[QRBN])?[+#]?|[a-h]x?[a-h][1-8](=[QRBN])?[+#]?|[a-h][1-8](=[QRBN])?[+#]?|[a-h][1-8][+#]?)$/i.test(token));
+  return tokens.map(san => ({ san, comment:'' }));
+}
+
+function groupEcoEntries(entries){
+  const groups = new Map();
+  (entries || []).forEach((entry, idx) => {
+    const code = String(entry?.code || '').trim().toUpperCase();
+    if(!code) return;
+    if(!groups.has(code)){
+      groups.set(code, {
+        code,
+        name: String(entry?.name || '').trim(),
+        rows: [],
+        sortIndex: idx
+      });
+    }
+    const group = groups.get(code);
+    if(!group.name && entry?.name) group.name = String(entry.name).trim();
+    group.rows.push({
+      code,
+      name: String(entry?.name || '').trim(),
+      moves: String(entry?.moves || '').trim(),
+      articleUrl: String(entry?.articleUrl || '').trim()
+    });
+  });
+  return Array.from(groups.values()).sort((a,b) => a.sortIndex - b.sortIndex);
+}
+
+function commonPrefixLength(sequences){
+  if(!sequences.length) return 0;
+  const minLen = Math.min(...sequences.map(seq => seq.length));
+  let idx = 0;
+  while(idx < minLen){
+    const move = sequences[0][idx];
+    if(sequences.some(seq => seq[idx] !== move)) break;
+    idx++;
+  }
+  return idx;
+}
+
+function ecoVariationLabel(group, row, idx){
+  const sequences = group.rows.map(item => ecoMovesToSavedLine(item.moves).map(mv => mv.san));
+  const current = sequences[idx] || [];
+  const prefixLen = commonPrefixLength(sequences);
+  const suffix = current.slice(prefixLen);
+  if(suffix.length) return suffix.slice(0, 3).join(' ');
+  if(current.length) return current[current.length - 1];
+  return row.name || `Variation ${idx + 1}`;
+}
+
+function buildEcoEntry(group){
+  const code = String(group?.code || '').trim();
+  const name = String(group?.name || '').trim();
+  const title = [code, name].filter(Boolean).join(' — ') || 'ECO Entry';
+  const tabs = (group?.rows || []).map((row, idx) => {
+    const savedMoves = ecoMovesToSavedLine(row.moves);
+    const label = ecoVariationLabel(group, row, idx);
+    const blocks = [];
+    if(row.name && row.name !== name){
+      blocks.push({ type:'text', content: `## Variation\n\n**${row.name}**` });
+    }
+    if(savedMoves.length){
+      blocks.push({
+        type:'line',
+        label: row.name || label,
+        popularity:'',
+        moves: savedMoves
+      });
+    } else if(row.moves){
+      blocks.push({ type:'text', content: `## Move Order\n\n\`${row.moves}\`` });
+    }
+    return {
+      label,
+      blocks: blocks.length ? blocks : [{ type:'text', content:'## Variation\n\nMove order unavailable.' }]
+    };
+  });
+
+  const overview = [
+    '## Overview',
+    code ? `ECO code: **${code}**.` : '',
+    name ? `Opening: **${name}**.` : '',
+    group?.rows?.length ? `Imported **${group.rows.length}** variation${group.rows.length === 1 ? '' : 's'} for this code.` : ''
+  ].filter(Boolean).join('\n\n');
+
+  return {
+    id: 'entry-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+    ecoCode: code,
+    title,
+    tags: uniqueList(['eco', code, 'reference']),
+    date: new Date().toISOString().slice(0, 10),
+    blocks: [
+      { type:'text', content: overview },
+      { type:'tabs', tabs: tabs.length ? tabs : [{ label:'Main Line', blocks:[{ type:'text', content:'## Variation\n\nNo saved lines were available.' }] }] }
+    ]
+  };
+}
+
+function findEcoEntryIndex(code){
+  const normalized = String(code || '').trim().toUpperCase();
+  if(!normalized) return -1;
+  return LINES.findIndex(entry => String(entry?.ecoCode || '').trim().toUpperCase() === normalized);
+}
+
+function importEcoGroup(group){
+  const existingIdx = findEcoEntryIndex(group?.code);
+  if(existingIdx >= 0){
+    openEd(existingIdx);
+    closeHome();
+    toast('ECO entry already exists','ok');
+    return;
+  }
+  LINES.push(buildEcoEntry(group));
+  markUnsaved();
+  renderView();
+  renderEcoList(ECO_CACHE || ECO_FALLBACK, document.getElementById('eco-search')?.value || '');
+  closeHome();
+  openEd(LINES.length - 1);
+  toast('ECO entry imported','ok');
+}
+
+function importEcoEntries(entries, query=''){
+  const groups = groupEcoEntries(entries);
+  const q = normalizeEcoText(query).toLowerCase();
+  const filtered = !q ? groups : groups.filter(group => {
+    const hay = [group.code, group.name, ...group.rows.map(row => `${row.name} ${row.moves}`)].join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+  if(!filtered.length){
+    toast('No ECO entries to import','err');
+    return;
+  }
+
+  let added = 0;
+  filtered.forEach(group => {
+    if(findEcoEntryIndex(group?.code) >= 0) return;
+    LINES.push(buildEcoEntry(group));
+    added++;
+  });
+
+  if(!added){
+    toast('Those ECO entries already exist','ok');
+    return;
+  }
+
+  markUnsaved();
+  renderView();
+  renderEcoList(ECO_CACHE || ECO_FALLBACK, document.getElementById('eco-search')?.value || '');
+  toast(`Imported ${added} ECO entr${added === 1 ? 'y' : 'ies'}`,'ok');
+}
+
 // ─── View rendering ──────────────────────────────────────────────────
 // We need to stamp tab buttons with the same IDs used in the nav tree.
 // We do a pre-pass to assign IDs, then buildBlocks uses them.
@@ -4742,9 +4906,10 @@ function renderEcoList(entries, query=''){
   const status = document.getElementById('eco-status');
   if(!list || !status) return;
 
+  const groups = groupEcoEntries(entries);
   const q = normalizeEcoText(query).toLowerCase();
-  const filtered = !q ? entries : entries.filter(entry => {
-    const hay = [entry.code, entry.name, entry.moves].join(' ').toLowerCase();
+  const filtered = !q ? groups : groups.filter(group => {
+    const hay = [group.code, group.name, ...group.rows.map(row => `${row.name} ${row.moves}`)].join(' ').toLowerCase();
     return hay.includes(q);
   });
 
@@ -4755,11 +4920,30 @@ function renderEcoList(entries, query=''){
   }
 
   status.textContent = `${filtered.length} ECO entries ${q ? 'matched' : 'loaded'}.`;
-  filtered.slice(0, 250).forEach(entry => {
+  filtered.slice(0, 250).forEach(group => {
     const card = document.createElement('div');
     card.style.cssText = 'padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;gap:10px;';
-    const title = entry.name ? `${entry.code} · ${entry.name}` : entry.code;
-    card.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text2);line-height:1.4;">${title}</div><div style="font-size:12px;color:var(--text);line-height:1.7;font-family:'JetBrains Mono',monospace;">${entry.moves}</div>`;
+    const title = group.name ? `${group.code} � ${group.name}` : group.code;
+    const existingIdx = findEcoEntryIndex(group.code);
+    const countLabel = `${group.rows.length} variation${group.rows.length === 1 ? '' : 's'}`;
+    card.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text2);line-height:1.4;">${title}</div><div style="font-size:11px;color:var(--muted);">${countLabel}</div><div style="font-size:12px;color:var(--muted);line-height:1.7;">Open the entry to view the saved lines, variation names, and opening notes.</div>`;
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'hbtn';
+    addBtn.type = 'button';
+    addBtn.style.fontSize = '11px';
+    addBtn.textContent = existingIdx >= 0 ? 'Open entry' : 'Create entry';
+    addBtn.onclick = ()=>{
+      if(existingIdx >= 0){
+        closeHome();
+        openEd(existingIdx);
+      } else {
+        importEcoGroup(group);
+      }
+    };
+    actions.appendChild(addBtn);
+    card.appendChild(actions);
     list.appendChild(card);
   });
 
@@ -4819,14 +5003,17 @@ const homeBtn = document.getElementById('home-btn');
 const contributorsBtn = document.getElementById('contributors-btn');
 const ecoSearch = document.getElementById('eco-search');
 const ecoReloadBtn = document.getElementById('eco-reload-btn');
+const ecoImportBtn = document.getElementById('eco-import-btn');
 
 if(homeBtn) homeBtn.addEventListener('click', openHome);
 if(contributorsBtn) contributorsBtn.addEventListener('click', openContributors);
 if(ecoSearch) ecoSearch.addEventListener('input', ()=>renderEcoList(ECO_CACHE || ECO_FALLBACK, ecoSearch.value));
 if(ecoReloadBtn) ecoReloadBtn.addEventListener('click', ()=>ensureEcoList(true));
+if(ecoImportBtn) ecoImportBtn.addEventListener('click', ()=>importEcoEntries(ECO_CACHE || ECO_FALLBACK, ecoSearch?.value || ''));
 
 // Show homepage on first load
 openHome();
 </script>
 </body>
 </html>
+
