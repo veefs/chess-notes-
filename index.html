@@ -2029,15 +2029,16 @@ function analyzeFenPromise(fen, turn, depth = 18, options = {}){
   });
 }
 
-const BRILLIANT_SCAN_DEPTH = 14;
-const BRILLIANT_CONFIRM_DEPTH = 18;
-const BRILLIANT_REPLY_DEPTH = 14;
-const BRILLIANT_ENGINE_LINE_PLIES = 8;
-const BRILLIANT_NEAR_BEST_CP = 35;
+const BRILLIANT_SCAN_DEPTH = 12;
+const BRILLIANT_CONFIRM_DEPTH = 16;
+const BRILLIANT_REPLY_DEPTH = 12;
+const BRILLIANT_ENGINE_LINE_PLIES = 5;
+const BRILLIANT_NEAR_BEST_CP = 45;
 const BRILLIANT_STABILITY_CP = 70;
 const BRILLIANT_REPLY_DROP_CP = 110;
 const BRILLIANT_ALREADY_WINNING_CP = 500;
 const BRILLIANT_MAX_RESULTS = 8;
+const BRILLIANT_MAX_SHORTLIST = 10;
 
 function scoreForMover(cp, mover){
   if(cp == null) return null;
@@ -2085,7 +2086,7 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
   if(!legalMoves.length) return [];
 
   const candidates = [];
-  let bestScore = -Infinity;
+  const bestScore = rootScore == null ? -Infinity : rootScore;
 
   for(let i = 0; i < legalMoves.length; i++){
     const move = legalMoves[i];
@@ -2103,15 +2104,19 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     const res = nextGame.move(moveSpecFromVerbose(move));
     if(!res) continue;
 
-    const shallowEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_SCAN_DEPTH, { forceFresh:true });
-    const deepEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_CONFIRM_DEPTH, { forceFresh:true });
-    const shallowScore = scoreForMover(payloadToCp(shallowEval), mover);
-    const deepScore = scoreForMover(payloadToCp(deepEval), mover);
-    if(deepScore == null) continue;
-
     const afterBoard = boardFromChessJs(nextGame);
     const sacValue = materialSwingForMove(start.board, afterBoard, mover);
-    bestScore = Math.max(bestScore, deepScore);
+    if(sacValue < 1) continue;
+
+    const shallowEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_SCAN_DEPTH);
+    const shallowScore = scoreForMover(payloadToCp(shallowEval), mover);
+    if(shallowScore == null) continue;
+    if(rootScore != null && shallowScore < rootScore - (BRILLIANT_NEAR_BEST_CP * 2)) continue;
+
+    const deepEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_CONFIRM_DEPTH, { forceFresh:true });
+    const deepScore = scoreForMover(payloadToCp(deepEval), mover);
+    if(deepScore == null) continue;
+    if(rootScore != null && deepScore < rootScore - BRILLIANT_NEAR_BEST_CP) continue;
 
     candidates.push({
       san: res.san,
@@ -2129,10 +2134,9 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
   if(!Number.isFinite(bestScore)) return [];
 
   const shortlist = candidates
-    .filter(candidate => candidate.sacValue >= 1)
     .filter(candidate => bestScore - candidate.deepScore <= BRILLIANT_NEAR_BEST_CP)
     .sort((a, b) => (b.sacValue - a.sacValue) || (b.deepScore - a.deepScore) || a.san.localeCompare(b.san))
-    .slice(0, BRILLIANT_MAX_RESULTS * 2);
+    .slice(0, BRILLIANT_MAX_SHORTLIST);
 
   const findings = [];
 
@@ -2164,7 +2168,7 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
       const replyRes = replyState.move(moveSpecFromVerbose(reply));
       if(!replyRes) continue;
 
-      const replyEval = await analyzeFenPromise(replyState.fen(), replyState.turn(), BRILLIANT_REPLY_DEPTH, { forceFresh:true });
+      const replyEval = await analyzeFenPromise(replyState.fen(), replyState.turn(), BRILLIANT_REPLY_DEPTH);
       const replyScore = scoreForMover(payloadToCp(replyEval), mover);
       if(replyScore == null) continue;
       if(replyScore < worstReplyScore){
