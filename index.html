@@ -2107,6 +2107,69 @@ function moveSpecFromVerbose(move){
   };
 }
 
+function squareToCoords(square){
+  return {
+    r: 8 - parseInt(String(square || '')[1], 10),
+    f: String(square || '')[0].charCodeAt(0) - 97
+  };
+}
+
+function inBounds(r, f){
+  return r >= 0 && r < 8 && f >= 0 && f < 8;
+}
+
+function boardPiece(board, r, f){
+  return inBounds(r, f) ? (board?.[r]?.[f] || null) : null;
+}
+
+function isSquareDefendedByBoard(board, targetR, targetF, color){
+  if(!inBounds(targetR, targetF)) return false;
+
+  const pawnRow = color === 'w' ? targetR + 1 : targetR - 1;
+  for(const df of [-1, 1]){
+    const pawn = boardPiece(board, pawnRow, targetF + df);
+    if(pawn === color + 'P') return true;
+  }
+
+  const knightOffsets = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+  for(const [dr, df] of knightOffsets){
+    const piece = boardPiece(board, targetR + dr, targetF + df);
+    if(piece === color + 'N') return true;
+  }
+
+  const kingOffsets = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  for(const [dr, df] of kingOffsets){
+    const piece = boardPiece(board, targetR + dr, targetF + df);
+    if(piece === color + 'K') return true;
+  }
+
+  const lineDirs = [
+    { dr:-1, df:0, pieces:['R','Q'] },
+    { dr:1, df:0, pieces:['R','Q'] },
+    { dr:0, df:-1, pieces:['R','Q'] },
+    { dr:0, df:1, pieces:['R','Q'] },
+    { dr:-1, df:-1, pieces:['B','Q'] },
+    { dr:-1, df:1, pieces:['B','Q'] },
+    { dr:1, df:-1, pieces:['B','Q'] },
+    { dr:1, df:1, pieces:['B','Q'] }
+  ];
+  for(const dir of lineDirs){
+    let r = targetR + dir.dr;
+    let f = targetF + dir.df;
+    while(inBounds(r, f)){
+      const piece = boardPiece(board, r, f);
+      if(piece){
+        if(piece[0] === color && dir.pieces.includes(piece[1])) return true;
+        break;
+      }
+      r += dir.dr;
+      f += dir.df;
+    }
+  }
+
+  return false;
+}
+
 function pieceValue(piece){
   if(!piece) return 0;
   const values = { P:1, N:3, B:3, R:5, Q:9, K:0 };
@@ -2157,12 +2220,16 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     const immediateSacValue = Math.max(0, materialSwingForMove(start.board, afterBoard, mover));
     const movedPieceValue = pieceValue(start.board?.[8 - parseInt(res.from[1], 10)]?.[res.from.charCodeAt(0) - 97]);
     const capturedValue = pieceValue(res.captured);
+    const enemyColor = mover === 'w' ? 'b' : 'w';
+    const toCoords = squareToCoords(res.to);
+    const capturedWasHanging = capturedValue > 0 && !isSquareDefendedByBoard(start.board, toCoords.r, toCoords.f, enemyColor);
     const postMoveReplies = nextGame.moves({ verbose:true }) || [];
     const recaptureExists = postMoveReplies.some(reply => reply.captured && reply.to === res.to);
     const apparentSacValue = recaptureExists && movedPieceValue > capturedValue ? (movedPieceValue - capturedValue) : 0;
     const sacValue = Math.max(immediateSacValue, apparentSacValue);
     const tacticalMove = !!res.captured || /\+|#/.test(res.san || '') || apparentSacValue > 0;
     if(sacValue < 1 && !tacticalMove) continue;
+    if(capturedWasHanging) continue;
 
     const shallowEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_SCAN_DEPTH);
     const shallowScore = scoreForMover(payloadToCp(shallowEval), mover);
