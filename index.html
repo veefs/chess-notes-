@@ -3615,8 +3615,8 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
 
 
 // ─── Eval / Stockfish ───────────────────────────────────────────────
-const STOCKFISH_WASM_URL = 'https://cdn.jsdelivr.net/npm/stockfish@18.0.7/bin/stockfish-18-lite-single.js';
-const STOCKFISH_ASM_URL = 'https://cdn.jsdelivr.net/npm/stockfish@18.0.7/bin/stockfish-18-asm.js';
+const STOCKFISH_WASM_URL = new URL('./stockfish/stockfish-18-lite-single.js', window.location.href).href;
+const STOCKFISH_ASM_URL = new URL('./stockfish/stockfish-18-asm.js', window.location.href).href;
 const ENGINE = {
   worker: null,
   ready: false,
