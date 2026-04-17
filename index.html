@@ -2098,6 +2098,11 @@ const BRILLIANT_MAX_DEEP_REPLIES = 4;
 const BRILLIANT_TREE_MAX_PLY = 80;
 const BRILLIANT_TREE_NODE_CAP = 12000;
 const BRILLIANT_PARALLEL_TASKS = Math.max(2, Math.min(4, Number((typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 4) || 4) - 1));
+const BRILLIANT_CACHE = {
+  sacNodes: new Map(),
+  continuations: new Map(),
+  findings: new Map(),
+};
 
 function scoreForMover(cp, mover){
   if(cp == null) return null;
@@ -2243,6 +2248,12 @@ function replyAcceptsSacrifice(reply, candidate){
 }
 
 async function analyzeReplyContinuation(replyState, mover, replyEval){
+  const continuationKey = `${replyState.fen()}|${mover}`;
+  if(BRILLIANT_CACHE.continuations.has(continuationKey)){
+    const cached = BRILLIANT_CACHE.continuations.get(continuationKey);
+    return cached ? { ...cached } : null;
+  }
+
   const firstPvMove = Array.isArray(replyEval?.pv) ? replyEval.pv[0] : '';
   if(!firstPvMove) return null;
 
@@ -2260,11 +2271,13 @@ async function analyzeReplyContinuation(replyState, mover, replyEval){
   const continuationScore = scoreForMover(payloadToCp(continuationEval), mover);
   if(continuationScore == null) return null;
 
-  return {
+  const result = {
     score: continuationScore,
     san: continuationRes.san,
     pvSan: pvToSan(continuation.fen(), continuationEval?.pv || [], 8)
   };
+  BRILLIANT_CACHE.continuations.set(continuationKey, result);
+  return { ...result };
 }
 
 async function runLimited(items, limit, workerFn){
@@ -2286,8 +2299,13 @@ async function runLimited(items, limit, workerFn){
 }
 
 function positionHasSacrificeCandidate(node){
+  const cacheKey = `${node?.fen}|${node?.turn}`;
+  if(BRILLIANT_CACHE.sacNodes.has(cacheKey)) return BRILLIANT_CACHE.sacNodes.get(cacheKey);
   const game = cloneGameFromFen(node?.fen);
-  if(!game) return false;
+  if(!game){
+    BRILLIANT_CACHE.sacNodes.set(cacheKey, false);
+    return false;
+  }
   const legalMoves = game.moves({ verbose:true }) || [];
   for(const move of legalMoves){
     const nextGame = cloneGameFromFen(node.fen);
@@ -2296,12 +2314,24 @@ function positionHasSacrificeCandidate(node){
     if(!res) continue;
     const postMoveReplies = nextGame.moves({ verbose:true }) || [];
     const sac = classifySacrificeCandidate(node.board, res, node.turn, postMoveReplies);
-    if(sac.isMeaningfulSacrifice && !sac.capturedWasHanging) return true;
+    if(sac.isMeaningfulSacrifice && !sac.capturedWasHanging){
+      BRILLIANT_CACHE.sacNodes.set(cacheKey, true);
+      return true;
+    }
   }
+  BRILLIANT_CACHE.sacNodes.set(cacheKey, false);
   return false;
 }
 
 async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, frontierIndex){
+  const findingsKey = `${start.fen}|${start.turn}`;
+  if(BRILLIANT_CACHE.findings.has(findingsKey)){
+    return BRILLIANT_CACHE.findings.get(findingsKey).map(item => ({
+      ...item,
+      path: Array.isArray(item.path) ? item.path.slice() : []
+    }));
+  }
+
   const rootGame = cloneGameFromFen(start.fen);
   if(!rootGame) return [];
 
@@ -2482,7 +2512,12 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     return null;
   });
 
-  return findingResults.filter(Boolean);
+  const finalFindings = findingResults.filter(Boolean);
+  BRILLIANT_CACHE.findings.set(findingsKey, finalFindings.map(item => ({
+    ...item,
+    path: Array.isArray(item.path) ? item.path.slice() : []
+  })));
+  return finalFindings;
 }
 
 async function findBrilliantMovesFromPosition(moves, onProgress){
