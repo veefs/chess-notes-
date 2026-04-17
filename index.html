@@ -2210,10 +2210,79 @@ function brilliantReasonFromSacrifice(sacValue){
   return 'Material investment';
 }
 
+function findPieceCoords(board, pieceCode){
+  for(let r = 0; r < 8; r++){
+    for(let f = 0; f < 8; f++){
+      if(board?.[r]?.[f] === pieceCode) return { r, f };
+    }
+  }
+  return null;
+}
+
+function isSlidingPieceForDirection(piece, dir){
+  const kind = String(piece || '').slice(-1);
+  if(!dir) return false;
+  if(kind === 'Q') return true;
+  if((dir.dr === 0 || dir.df === 0) && kind === 'R') return true;
+  if((dir.dr !== 0 && dir.df !== 0) && kind === 'B') return true;
+  return false;
+}
+
+function isClearanceSacrifice(startBoard, fromCoords, mover, enemyColor){
+  const enemyKing = findPieceCoords(startBoard, enemyColor + 'K');
+  if(!enemyKing) return false;
+
+  const dirs = [
+    { dr:-1, df:0 }, { dr:1, df:0 }, { dr:0, df:-1 }, { dr:0, df:1 },
+    { dr:-1, df:-1 }, { dr:-1, df:1 }, { dr:1, df:-1 }, { dr:1, df:1 }
+  ];
+
+  for(const dir of dirs){
+    let r = fromCoords.r - dir.dr;
+    let f = fromCoords.f - dir.df;
+    let friendlySlider = null;
+    while(inBounds(r, f)){
+      const piece = boardPiece(startBoard, r, f);
+      if(piece){
+        if(piece[0] === mover && isSlidingPieceForDirection(piece, dir)){
+          friendlySlider = { r, f, piece };
+        }
+        break;
+      }
+      r -= dir.dr;
+      f -= dir.df;
+    }
+    if(!friendlySlider) continue;
+
+    r = fromCoords.r + dir.dr;
+    f = fromCoords.f + dir.df;
+    while(inBounds(r, f)){
+      if(r === enemyKing.r && f === enemyKing.f) return true;
+      const piece = boardPiece(startBoard, r, f);
+      if(piece) break;
+      r += dir.dr;
+      f += dir.df;
+    }
+  }
+  return false;
+}
+
+function sacrificeCategoryLabel(category){
+  switch(category){
+    case 'direct_hanging': return 'Direct hanging sacrifice';
+    case 'apparent': return 'Apparent sacrifice';
+    case 'clearance': return 'Clearance sacrifice';
+    case 'deflection': return 'Deflection sacrifice';
+    case 'positional': return 'Positional sacrifice';
+    default: return 'Sacrifice';
+  }
+}
+
 function classifySacrificeCandidate(startBoard, res, mover, postMoveReplies){
   const enemyColor = mover === 'w' ? 'b' : 'w';
   const movedPieceValue = pieceValue(startBoard?.[8 - parseInt(res.from[1], 10)]?.[res.from.charCodeAt(0) - 97]);
   const capturedValue = pieceValue(res.captured);
+  const fromCoords = squareToCoords(res.from);
   const toCoords = squareToCoords(res.to);
   const destinationDefended = isSquareDefendedByBoard(startBoard, toCoords.r, toCoords.f, enemyColor);
   const capturedWasHanging = capturedValue > 0 && !destinationDefended;
@@ -2223,6 +2292,11 @@ function classifySacrificeCandidate(startBoard, res, mover, postMoveReplies){
   const sacValue = Math.max(quietOfferValue, apparentSacValue);
   const isRealSacrifice = destinationDefended && recaptureExists;
   const isMeaningfulSacrifice = isRealSacrifice && movedPieceValue >= 3 && sacValue >= BRILLIANT_MIN_SAC_VALUE;
+  let category = 'positional';
+  if(isClearanceSacrifice(startBoard, fromCoords, mover, enemyColor)) category = 'clearance';
+  else if(capturedValue > 0 && destinationDefended && recaptureExists) category = 'deflection';
+  else if(quietOfferValue > 0) category = 'direct_hanging';
+  else if(apparentSacValue > 0) category = 'apparent';
 
   return {
     movedPieceValue,
@@ -2233,13 +2307,15 @@ function classifySacrificeCandidate(startBoard, res, mover, postMoveReplies){
     sacValue,
     isRealSacrifice,
     isMeaningfulSacrifice,
-    reason: movedPieceValue >= 9
+    category,
+    categoryLabel: sacrificeCategoryLabel(category),
+    reason: `${sacrificeCategoryLabel(category)} · ${movedPieceValue >= 9
       ? 'Queen sacrifice'
       : movedPieceValue >= 5
         ? 'Rook sacrifice'
         : movedPieceValue >= 3
           ? 'Piece sacrifice'
-          : (quietOfferValue > apparentSacValue ? brilliantReasonFromSacrifice(quietOfferValue) : brilliantReasonFromSacrifice(apparentSacValue || quietOfferValue))
+          : (quietOfferValue > apparentSacValue ? brilliantReasonFromSacrifice(quietOfferValue) : brilliantReasonFromSacrifice(apparentSacValue || quietOfferValue))}`
   };
 }
 
