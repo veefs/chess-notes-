@@ -2399,14 +2399,21 @@ function positionHasSacrificeCandidate(node){
   return false;
 }
 
-async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, frontierIndex, config){
+async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, frontierIndex, config, onFinding){
   const findingsKey = `${start.fen}|${start.turn}|${config.key}`;
   const cached = BRILLIANT_TT.findings.get(findingsKey);
   if(cached && cached.depth >= config.confirmDepth){
-    return cached.result.map(item => ({
+    const cachedResults = cached.result.map(item => ({
       ...item,
       path: Array.isArray(item.path) ? item.path.slice() : []
     }));
+    if(typeof onFinding === 'function'){
+      cachedResults.forEach(item => onFinding({
+        ...item,
+        path: Array.isArray(item.path) ? item.path.slice() : []
+      }));
+    }
+    return cachedResults;
   }
 
   const rootGame = cloneGameFromFen(start.fen);
@@ -2582,7 +2589,7 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     const sacrificeCanBeAccepted = foundAcceptance;
 
     if(notAlreadyWinning && stableEnough && replyHolds && notBadAfterMove && stillNearBestAfterDefense && sacrificeCanBeAccepted){
-      return {
+      const found = {
         path: (start.path || []).slice(),
         pathPly: frontierIndex,
         san: candidate.san,
@@ -2604,6 +2611,13 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
         pvSan: candidate.pvSan,
         reason: candidate.reason
       };
+      if(typeof onFinding === 'function'){
+        onFinding({
+          ...found,
+          path: Array.isArray(found.path) ? found.path.slice() : []
+        });
+      }
+      return found;
     }
     return null;
   });
@@ -2619,7 +2633,7 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
   return finalFindings;
 }
 
-async function findBrilliantMovesFromPosition(moves, onProgress, mode='deep'){
+async function findBrilliantMovesFromPosition(moves, onProgress, mode='deep', onFinding){
   const config = getBrilliantModeConfig(mode);
   const built = buildStatesFromMoves(moves || []);
   const states = built.states || [];
@@ -2655,7 +2669,7 @@ async function findBrilliantMovesFromPosition(moves, onProgress, mode='deep'){
     if(positionHasSacrificeCandidate(node)){
       const rootEval = await analyzeFenPromise(node.fen, node.turn, config.confirmDepth, { forceFresh:true, parallel:true });
       if(rootEval){
-        const localFindings = await findBrilliantCandidatesAtPosition(node, rootEval, onProgress, ply, config);
+        const localFindings = await findBrilliantCandidatesAtPosition(node, rootEval, onProgress, ply, config, onFinding);
         findings.push(...localFindings);
       }
     }
@@ -2916,6 +2930,56 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
   results.appendChild(resultsTitle);
   card.appendChild(results);
 
+  function renderFinding(item, baseMoves, foundKeys){
+    const key = [...(item.path || []), item.san].join(' ');
+    if(foundKeys.has(key)) return false;
+    foundKeys.add(key);
+    resultsTitle.style.display = 'block';
+    const box = document.createElement('div');
+    box.className = 'engine-line-box';
+    const prefix = item.path && item.path.length ? `After ${item.path.join(' ')} -> ` : '';
+    const replyParts = [];
+    if(item.bestAcceptanceSan) replyParts.push(`Best acceptance: ${item.bestAcceptanceSan} (${formatBrilliantScore(item.bestAcceptanceScore)})`);
+    if(item.bestDeclineSan) replyParts.push(`Best decline: ${item.bestDeclineSan} (${formatBrilliantScore(item.bestDeclineScore)})`);
+    if(item.bestDefenseSan) replyParts.push(`Best defense: ${item.bestDefenseSan} (${formatBrilliantScore(item.bestDefenseScore)})`);
+    const replyText = replyParts.length ? replyParts.join(' | ') : (item.worstReplySan ? `${item.worstReplySan} keeps the eval at ${formatBrilliantScore(item.worstReplyScore)}` : 'No legal reply improves the defense');
+    const pvText = item.pvSan ? ` PV: ${item.pvSan}` : '';
+    const fullLine = [...baseMoves, ...(item.path || []), item.san].filter(Boolean).join(' ');
+    box.innerHTML = `<div class="engine-line-label">${esc(prefix + item.san)} | ${esc(item.reason)}</div><div class="engine-line-value">Eval ${formatBrilliantScore(item.score)} | best-gap ${formatBrilliantGap(item.bestGap)} | sacrifice value ${item.sacValue} | ${esc(replyText)}${esc(pvText)}</div>`;
+    const actionRow = document.createElement('div');
+    actionRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;';
+    const loadBtn = document.createElement('button');
+    loadBtn.className = 'hbtn';
+    loadBtn.type = 'button';
+    loadBtn.textContent = 'Load on board';
+    loadBtn.onclick = () => {
+      block.moves = fullLine.split(/\s+/).filter(Boolean).map(san => ({ san, comment:'' }));
+      sanBox.value = fullLine;
+      engineValue.textContent = 'Updating engine line...';
+      engineValue.classList.add('empty');
+      renderBoardInput();
+      window.requestAnimationFrame(() => {
+        boardHost.scrollIntoView({ behavior:'smooth', block:'start' });
+      });
+    };
+    actionRow.appendChild(loadBtn);
+    box.appendChild(actionRow);
+    const movesLabel = document.createElement('div');
+    movesLabel.className = 'engine-line-label';
+    movesLabel.style.marginTop = '8px';
+    movesLabel.textContent = 'Moves to reach this brilliant move';
+    const movesBox = document.createElement('textarea');
+    movesBox.className = 'ed-textarea ed-mono';
+    movesBox.readOnly = true;
+    movesBox.value = fullLine;
+    movesBox.style.minHeight = '76px';
+    movesBox.style.resize = 'vertical';
+    box.appendChild(movesLabel);
+    box.appendChild(movesBox);
+    results.appendChild(box);
+    return true;
+  }
+
   runBtn.onclick = async () => {
     runBtn.disabled = true;
     results.innerHTML = '';
@@ -2927,6 +2991,8 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
     status.className = 'practice-status';
     try {
       const baseMoves = (block.moves || []).map(move => move.san).filter(Boolean);
+      const foundKeys = new Set();
+      let liveFoundCount = 0;
       const findings = await findBrilliantMovesFromPosition(block.moves || [], progress => {
         if(progress.stage === 'tree') {
           status.textContent = `Scanning deep reply tree depth ${progress.depth} (${progress.explored}/${progress.total} positions)`;
@@ -2939,58 +3005,20 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
         if(progress.stage === 'replies') {
           status.textContent = `Checking replies for ${progress.san} (${progress.current}/${progress.total})`;
         }
-      }, brilliantMode);
+      }, brilliantMode, item => {
+        if(renderFinding(item, baseMoves, foundKeys)){
+          liveFoundCount++;
+          status.textContent = `Found ${liveFoundCount} brilliant-move candidate${liveFoundCount === 1 ? '' : 's'} so far...`;
+          status.className = 'practice-status ok';
+        }
+      });
       if(!findings.length){
         status.textContent = 'No brilliant-move candidates were found in the scanned engine-line positions from this start.';
         status.className = 'practice-status';
       } else {
         status.textContent = `Found ${findings.length} brilliant-move candidate${findings.length === 1 ? '' : 's'} in the scanned engine lines.`;
         status.className = 'practice-status ok';
-        resultsTitle.style.display = 'block';
-        findings.forEach(item => {
-          const box = document.createElement('div');
-          box.className = 'engine-line-box';
-          const prefix = item.path && item.path.length ? `After ${item.path.join(' ')} -> ` : '';
-          const replyParts = [];
-          if(item.bestAcceptanceSan) replyParts.push(`Best acceptance: ${item.bestAcceptanceSan} (${formatBrilliantScore(item.bestAcceptanceScore)})`);
-          if(item.bestDeclineSan) replyParts.push(`Best decline: ${item.bestDeclineSan} (${formatBrilliantScore(item.bestDeclineScore)})`);
-          if(item.bestDefenseSan) replyParts.push(`Best defense: ${item.bestDefenseSan} (${formatBrilliantScore(item.bestDefenseScore)})`);
-          const replyText = replyParts.length ? replyParts.join(' | ') : (item.worstReplySan ? `${item.worstReplySan} keeps the eval at ${formatBrilliantScore(item.worstReplyScore)}` : 'No legal reply improves the defense');
-          const pvText = item.pvSan ? ` PV: ${item.pvSan}` : '';
-          const fullLine = [...baseMoves, ...(item.path || []), item.san].filter(Boolean).join(' ');
-          box.innerHTML = `<div class="engine-line-label">${esc(prefix + item.san)} | ${esc(item.reason)}</div><div class="engine-line-value">Eval ${formatBrilliantScore(item.score)} | best-gap ${formatBrilliantGap(item.bestGap)} | sacrifice value ${item.sacValue} | ${esc(replyText)}${esc(pvText)}</div>`;
-          const actionRow = document.createElement('div');
-          actionRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;';
-          const loadBtn = document.createElement('button');
-          loadBtn.className = 'hbtn';
-          loadBtn.type = 'button';
-          loadBtn.textContent = 'Load on board';
-          loadBtn.onclick = () => {
-            block.moves = fullLine.split(/\s+/).filter(Boolean).map(san => ({ san, comment:'' }));
-            sanBox.value = fullLine;
-            engineValue.textContent = 'Updating engine line...';
-            engineValue.classList.add('empty');
-            renderBoardInput();
-            window.requestAnimationFrame(() => {
-              boardHost.scrollIntoView({ behavior:'smooth', block:'start' });
-            });
-          };
-          actionRow.appendChild(loadBtn);
-          box.appendChild(actionRow);
-          const movesLabel = document.createElement('div');
-          movesLabel.className = 'engine-line-label';
-          movesLabel.style.marginTop = '8px';
-          movesLabel.textContent = 'Moves to reach this brilliant move';
-          const movesBox = document.createElement('textarea');
-          movesBox.className = 'ed-textarea ed-mono';
-          movesBox.readOnly = true;
-          movesBox.value = fullLine;
-          movesBox.style.minHeight = '76px';
-          movesBox.style.resize = 'vertical';
-          box.appendChild(movesLabel);
-          box.appendChild(movesBox);
-          results.appendChild(box);
-        });
+        findings.forEach(item => { renderFinding(item, baseMoves, foundKeys); });
       }
     } catch(_) {
       status.textContent = 'The brilliant move finder could not finish this scan.';
