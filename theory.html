@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Chess Notes</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -34,7 +34,7 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
-body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; overflow-x: hidden; }
+body { font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 15px; overflow-x: hidden; }
 
 /* Header */
 header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 20px; height: 54px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 200; box-shadow: 0 1px 12px rgba(0,0,0,.4); }
@@ -78,7 +78,7 @@ nav { background: var(--bg2); border-right: 1px solid var(--border); padding: 12
 .tree-row.active-leaf .tree-label { color: var(--accent); }
 
 /* Main */
-main { padding: 36px 48px; max-width: 920px; }
+main { padding: 36px 48px; max-width: 1400px; }
 
 /* Entry */
 .entry { margin-bottom: 64px; scroll-margin-top: 74px; }
@@ -93,15 +93,24 @@ main { padding: 36px 48px; max-width: 920px; }
 
 /* Blocks */
 .block { margin-bottom: 24px; }
-.block-text { font-size: 14px; line-height: 1.9; color: var(--text); max-width: 640px; }
-.block-text-wrap { position: relative; max-width: 640px; margin-bottom: 24px; }
-.tts-btn { position: absolute; top: 0; right: 0; background: var(--bg3); border: 1px solid var(--border); cursor: pointer; font-size: 13px; opacity: 1; transition: background .15s, border-color .15s; padding: 3px 8px; line-height: 1; border-radius: 3px; color: var(--muted); }
+.block-text { font-size: var(--text-size, 15px); line-height: 1.85; color: var(--text); max-width: 640px; }
+.block-text-wrap { display: flex; flex-direction: column; align-items: flex-start; max-width: 640px; margin-bottom: 24px; }
+.txt-btn-group { display: flex; gap: 3px; align-self: flex-end; margin-bottom: 6px; }
+.tts-btn { background: var(--bg3); border: 1px solid var(--border); cursor: pointer; font-size: 13px; transition: background .15s, border-color .15s; padding: 3px 8px; line-height: 1; border-radius: 3px; color: var(--muted); }
 .tts-btn:hover { background: var(--bg4); border-color: var(--border2); color: var(--text2); }
 .tts-btn.speaking { background: rgba(165,148,192,.15); border-color: var(--accent); color: var(--accent); }
+.edit-txt-btn { background: var(--bg3); border: 1px solid var(--border); cursor: pointer; font-size: 12px; padding: 3px 8px; line-height: 1; border-radius: 3px; color: var(--muted); transition: background .15s, border-color .15s; }
+.edit-txt-btn:hover { background: var(--bg4); border-color: var(--border2); color: var(--accent); }
+.inline-edit-ta { width: 100%; min-height: 120px; background: var(--bg2); border: 1px solid var(--accent); border-radius: var(--radius); color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 10px 12px; resize: vertical; outline: none; box-sizing: border-box; }
+.inline-edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+.inline-save-btn { background: rgba(165,148,192,.15); border: 1px solid var(--accent); color: var(--accent); border-radius: var(--radius); font-size: 12px; font-family: 'Outfit', sans-serif; padding: 5px 14px; cursor: pointer; transition: background .15s; }
+.inline-save-btn:hover { background: rgba(165,148,192,.28); }
+.inline-cancel-btn { background: none; border: 1px solid var(--border2); color: var(--muted); border-radius: var(--radius); font-size: 12px; font-family: 'Outfit', sans-serif; padding: 5px 14px; cursor: pointer; transition: background .15s; }
+.inline-cancel-btn:hover { background: var(--bg4); color: var(--text2); }
 .block-text p  { margin-bottom: 12px; }
 .block-text p:last-child { margin-bottom: 0; }
-.block-text h2 { font-size: 16px; font-weight: 700; color: var(--text2); margin: 20px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 5px; letter-spacing: -.01em; }
-.block-text h3 { font-size: 14px; font-weight: 600; color: var(--text2); margin: 16px 0 6px; }
+.block-text h2 { font-size: 18px; font-weight: 700; color: var(--text2); margin: 20px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 5px; letter-spacing: -.01em; }
+.block-text h3 { font-size: 16px; font-weight: 600; color: var(--text2); margin: 16px 0 6px; }
 .block-text ol { list-style: decimal; padding-left: 22px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
 .block-text ul { list-style: none; padding-left: 4px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
 .block-text ul li { padding-left: 18px; position: relative; }
@@ -117,6 +126,9 @@ main { padding: 36px 48px; max-width: 920px; }
 .block-line-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg3); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .block-line-label { font-size: 12px; font-weight: 600; color: var(--text2); letter-spacing: -.01em; }
 .line-action-btn { margin-left: auto; }
+.line-action-group { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.line-map-btn { background: none; border: none; cursor: pointer; font-size: 13px; opacity: 0.35; padding: 2px 4px; border-radius: 4px; transition: opacity .15s; }
+.line-map-btn:hover { opacity: 1; }
 .pop-wrap { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .pop-bar { width: 64px; height: 3px; background: var(--border2); border-radius: 2px; overflow: hidden; }
 .pop-fill { height: 100%; background: var(--accent); border-radius: 2px; }
@@ -129,7 +141,10 @@ main { padding: 36px 48px; max-width: 920px; }
 .tabs-nav::-webkit-scrollbar { height: 6px; }
 .tabs-nav::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 999px; }
 .tabs-nav::-webkit-scrollbar-track { background: transparent; }
-.tab-btn { flex-shrink: 0; background: none; border: none; border-radius: 5px 5px 0 0; color: var(--muted); font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500; padding: 7px 14px 9px; cursor: pointer; transition: color .12s, background .12s; white-space: nowrap; position: relative; }
+.tab-btn { flex-shrink: 0; background: none; border: none; border-radius: 5px 5px 0 0; color: var(--muted); font-family: 'Outfit', sans-serif; font-size: 12px; font-weight: 500; padding: 7px 14px 9px; cursor: pointer; transition: color .12s, background .12s; white-space: nowrap; position: relative; display: flex; align-items: center; gap: 5px; }
+.tab-map-ico { opacity: 0; font-size: 10px; line-height: 1; transition: opacity .15s; flex-shrink: 0; }
+.tab-btn:hover .tab-map-ico { opacity: 0.7; }
+.tab-map-ico:hover { opacity: 1 !important; }
 .tab-btn:hover { color: var(--text2); background: var(--bg4); }
 .tab-btn.active { color: var(--text2); background: var(--bg); font-weight: 600; }
 .tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; }
@@ -922,6 +937,33 @@ body.brilliant-page-open > footer {
 .practice-status.err { border-left-color: var(--danger); color: #f2b0b0; }
 .practice-status.ok { border-left-color: var(--success); }
 
+/* ── Large screen expansion ─────────────────────────────────── */
+@media (min-width: 1600px) {
+  :root { --sq: 64px; }
+  main { padding: 40px 64px; }
+  .block-text { max-width: 780px; }
+  .block-text-wrap { max-width: 780px; }
+  .move-panel { flex-basis: 520px; max-width: 1200px; }
+}
+@media (min-width: 1920px) {
+  :root { --sq: 70px; }
+  main { padding: 44px 80px; max-width: 1600px; }
+  .block-text { max-width: 860px; }
+  .block-text-wrap { max-width: 860px; }
+}
+
+/* ── Mid-size desktop scaling ───────────────────────────────── */
+@media (min-width: 769px) and (max-width: 1280px) {
+  :root { --sq: 50px; }
+}
+@media (min-width: 769px) and (max-width: 1100px) {
+  :root { --sq: 44px; --editor-w: 400px; }
+  .app { grid-template-columns: 190px 1fr; }
+  .app.editor-open { grid-template-columns: 190px 1fr var(--editor-w); }
+  nav { width: 190px; }
+  main { padding: 24px 28px; }
+}
+
 @media (max-width: 768px) {
   :root { --sq: 42px; --editor-w: 100vw; }
   .site-sub { display: none; }
@@ -930,7 +972,7 @@ body.brilliant-page-open > footer {
   .nav-label { display: none; }
   .nav-item { width: auto; border-left: none; border-bottom: 2px solid transparent; padding: 6px 10px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
   .nav-item.active { border-left: none; border-bottom-color: var(--accent); }
-  main { padding: 16px; }
+  main { padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
   .study-layout { flex-direction: column; gap: 12px; }
   .eval-shell { width: 100%; }
   .eval-wrap { flex-direction: row; align-items: stretch; width: 100%; }
@@ -953,8 +995,18 @@ body.brilliant-page-open > footer {
   .board-coords { grid-template-columns: 14px calc(var(--sq)*8); grid-template-rows: calc(var(--sq)*8) 14px; }
   .move-list-inner { max-height: 180px; }
   #editor-panel { position: fixed; inset: 0; width: 100vw; z-index: 1000; }
+  /* Header: scrollable, hide non-essential buttons */
+  header { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  header::-webkit-scrollbar { display: none; }
+  #contributors-btn, #map-btn, #brilliant-top-btn { display: none; }
+  /* iOS Safari: use dynamic viewport height */
+  body { min-height: 100dvh; }
+  nav { height: auto; }
 }
-@media (max-width: 400px) { :root { --sq: 36px; } }
+@media (max-width: 400px) {
+  :root { --sq: 36px; }
+  #new-btn { display: none; }
+}
 /* ═══════════════ MAP OVERLAY ═══════════════════════════════════ */
 #map-overlay {
   display: none;
@@ -1060,7 +1112,7 @@ body.brilliant-page-open > footer {
   <span class="site-title">♟ Open Source Theory</span>
   <span class="site-sub" id="json-filename">chess-notes.json</span>
 
-  <button class="hbtn" id="home-btn">
+  <button class="hbtn" id="home-btn" style="display:none">
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 7L8 2l6 5v7a1 1 0 01-1 1H3a1 1 0 01-1-1z"/><polyline points="6 16 6 10 10 10 10 16"/></svg>
     Home
   </button>
@@ -1095,13 +1147,13 @@ body.brilliant-page-open > footer {
     Map
   </button>
 
-  <!-- ✅ PLAY BOT BUTTON -->
   <button class="hbtn" id="brilliant-top-btn">
     Brilliant Finder
   </button>
 
-  <button class="hbtn" id="play-bot-btn">
-    ♟ Play Bot
+  <button class="hbtn" id="settings-btn">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+    Settings
   </button>
 
 </header>
@@ -1148,60 +1200,58 @@ body.brilliant-page-open > footer {
 <div class="toast" id="toast"></div>
 <input type="file" id="file-inp" accept=".json" style="display:none">
 
-<!-- HOME OVERLAY -->
-<div id="home-overlay" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:600;flex-direction:column;overflow-y:auto;">
-  <div style="max-width:860px;margin:0 auto;padding:60px 40px;">
-    <div style="margin-bottom:48px;">
-      <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted2);font-weight:600;margin-bottom:12px;">Open Source Theory</div>
-      <div style="font-size:36px;font-weight:700;color:var(--text2);letter-spacing:-.03em;margin-bottom:16px;line-height:1.1;">Community-driven chess<br>opening theory.</div>
-      <div style="font-size:15px;color:var(--muted);line-height:1.8;max-width:560px;margin-bottom:28px;">A collaborative platform where anyone can contribute, edit, and expand chess opening theory. Open, community-driven, and free forever.</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button onclick="closeHome()" class="hbtn primary-btn" style="font-size:13px;padding:9px 20px;">Browse Theory →</button>
-        <a href="https://github.com/veefs/chess-notes-" target="_blank" class="hbtn" style="font-size:13px;padding:9px 20px;text-decoration:none;">GitHub</a>
+<!-- SETTINGS OVERLAY -->
+<div id="settings-overlay" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:600;flex-direction:column;overflow-y:auto;">
+  <div style="max-width:620px;margin:0 auto;padding:60px 40px;">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:40px;">
+      <button onclick="closeSettings()" class="hbtn" style="font-size:12px;">← Back</button>
+      <div>
+        <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted2);font-weight:600;margin-bottom:4px;">Open Source Theory</div>
+        <div style="font-size:24px;font-weight:700;color:var(--text2);letter-spacing:-.02em;">Settings</div>
       </div>
     </div>
-    <div style="border-top:1px solid var(--border);padding-top:40px;margin-bottom:40px;">
-      <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);font-weight:600;margin-bottom:20px;">Available Theory</div>
-      <div id="home-entry-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
-    </div>
-    <div style="border-top:1px solid var(--border);padding-top:40px;margin-bottom:40px;">
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+
+    <!-- Board -->
+    <div style="margin-bottom:36px;">
+      <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);font-weight:600;margin-bottom:20px;">Board</div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;display:flex;flex-direction:column;gap:18px;">
         <div>
-          <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);font-weight:600;margin-bottom:8px;">ECO List</div>
-          <div style="font-size:13px;color:var(--muted);line-height:1.7;max-width:560px;">ECO codes are synced into the main entry list automatically, with grouped variations stored inside each opening page.</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button id="eco-reload-btn" class="hbtn" type="button" style="font-size:12px;">Reload ECO</button>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+            <label style="font-size:13px;color:var(--text2);font-weight:600;">Square size</label>
+            <span id="sq-val" style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--accent);">56px</span>
+          </div>
+          <input id="sq-slider" type="range" min="36" max="80" value="56" style="width:100%;accent-color:var(--accent);">
+          <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:11px;color:var(--muted2);">
+            <span>Small</span><span>Large</span>
+          </div>
         </div>
       </div>
-      <div style="margin-bottom:14px;">
-        <input id="eco-search" type="search" placeholder="Search ECO code, opening, or move order" style="width:100%;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);font:inherit;">
-      </div>
-      <div id="eco-status" style="font-size:12px;color:var(--muted);margin-bottom:12px;">Loading ECO list…</div>
-      <div id="eco-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;max-height:420px;overflow:auto;padding-right:4px;"></div>
     </div>
-    <div style="border-top:1px solid var(--border);padding-top:40px;">
-      <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);font-weight:600;margin-bottom:20px;">How to Contribute</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;">
-        <div style="padding:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);">
-          <div style="font-size:20px;margin-bottom:10px;">1.</div>
-          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px;">Load & edit</div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.7;">Open the theory, make your changes or add new lines using the editor.</div>
-        </div>
-        <div style="padding:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);">
-          <div style="font-size:20px;margin-bottom:10px;">2.</div>
-          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px;">Save JSON</div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.7;">Hit Save JSON to download your updated theory file.</div>
-        </div>
-        <div style="padding:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);">
-          <div style="font-size:20px;margin-bottom:10px;">3.</div>
-          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px;">Submit</div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.7;">DM the JSON file. After review it gets merged and credited to you.</div>
+
+    <!-- Typography -->
+    <div style="margin-bottom:36px;">
+      <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);font-weight:600;margin-bottom:20px;">Typography</div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+            <label style="font-size:13px;color:var(--text2);font-weight:600;">Text size</label>
+            <span id="txt-val" style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--accent);">15px</span>
+          </div>
+          <input id="txt-slider" type="range" min="12" max="36" value="15" style="width:100%;accent-color:var(--accent);">
+          <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:11px;color:var(--muted2);">
+            <span>Small</span><span>Accessible</span>
+          </div>
         </div>
       </div>
+    </div>
+
+    <!-- Reset -->
+    <div>
+      <button onclick="resetSettings()" class="hbtn" style="font-size:12px;color:var(--danger);border-color:rgba(224,85,85,.4);">Reset to defaults</button>
     </div>
   </div>
 </div>
+
 
 <!-- CONTRIBUTORS OVERLAY -->
 <div id="contributors-overlay" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:600;flex-direction:column;overflow-y:auto;">
@@ -4914,7 +4964,6 @@ function openEntryPageByIndex(idx){
   if(!entry) return;
   if(edOpen) closeEd();
   renderView();
-  closeHome();
   requestAnimationFrame(() => {
     document.getElementById(entry.id)?.scrollIntoView({ behavior:'smooth', block:'start' });
   });
@@ -4958,50 +5007,76 @@ function assignTabIds(blocks, nodeList){
   }
 }
 
-function buildBlocks(blocks, container, entry){
+function buildBlocks(blocks, container, entry, parentNavId){
   for(const block of blocks){
     if(block.type==='text'){
       const wrap=document.createElement('div');wrap.className='block block-text-wrap';
       const textEl=document.createElement('div');textEl.className='block-text';
       textEl.innerHTML=renderMarkdown(block.content);
-      const ttsBtn=document.createElement('button');ttsBtn.className='tts-btn';ttsBtn.title='Read aloud';ttsBtn.textContent='??';
+      const ttsBtn=document.createElement('button');ttsBtn.className='tts-btn';ttsBtn.title='Read aloud';ttsBtn.textContent='🔊';
       let utterance=null;
+      const pickVoice = () => {
+        const voices = window.speechSynthesis.getVoices();
+        const score = v => {
+          const n = v.name;
+          if(!v.lang.startsWith('en')) return -1;
+          if(n.includes('Natural')) return 100;
+          if(n.includes('Online')) return 90;
+          if(n.includes('Neural')) return 85;
+          if(/Google (UK English Female|US English)/.test(n)) return 80;
+          if(/Microsoft (Aria|Emma|Jenny|Guy|Ana|Christopher|Eric|Brian)/.test(n)) return 75;
+          if(/Samantha|Karen|Daniel|Moira|Tessa/.test(n)) return 60;
+          if(n.toLowerCase().includes('female') || n.toLowerCase().includes('woman')) return 40;
+          return 10;
+        };
+        return voices.filter(v => v.lang.startsWith('en')).sort((a,b) => score(b)-score(a))[0] || voices[0];
+      };
       ttsBtn.onclick=()=>{
         if(window.speechSynthesis.speaking){
           window.speechSynthesis.cancel();
-          ttsBtn.textContent='??';
+          ttsBtn.textContent='🔊';
           ttsBtn.classList.remove('speaking');
           return;
         }
         const text=(block.content||'').replace(/[#*`_~]/g,'').replace(/\n+/g,' ').trim();
         utterance=new SpeechSynthesisUtterance(text);
-        utterance.rate=0.92;
+        utterance.rate=0.88;
         utterance.pitch=1.0;
-        // Pick best available voice � prefer neural/natural Google/Microsoft voices
-        const voices = window.speechSynthesis.getVoices();
-        const preferred = [
-          'Google UK English Female','Google UK English Male',
-          'Google US English','Microsoft Aria Online (Natural)',
-          'Microsoft Guy Online (Natural)','Microsoft Jenny Online (Natural)',
-          'Microsoft Zira','Microsoft David','Samantha','Karen','Daniel'
-        ];
-        let chosen = null;
-        for(const name of preferred){
-          chosen = voices.find(v => v.name === name);
-          if(chosen) break;
-        }
-        if(!chosen) chosen = voices.find(v => v.lang.startsWith('en') && v.name.toLowerCase().includes('female'))
-                          || voices.find(v => v.lang.startsWith('en'))
-                          || voices[0];
-        if(chosen) utterance.voice = chosen;
-        utterance.onend=()=>{ ttsBtn.textContent='??'; ttsBtn.classList.remove('speaking'); };
-        utterance.onerror=()=>{ ttsBtn.textContent='??'; ttsBtn.classList.remove('speaking'); };
-        ttsBtn.textContent='?';
-        ttsBtn.classList.add('speaking');
-        window.speechSynthesis.speak(utterance);
+        utterance.volume=1.0;
+        const trySpeak = () => {
+          const chosen = pickVoice();
+          if(chosen) utterance.voice = chosen;
+          utterance.onend=()=>{ ttsBtn.textContent='🔊'; ttsBtn.classList.remove('speaking'); };
+          utterance.onerror=()=>{ ttsBtn.textContent='🔊'; ttsBtn.classList.remove('speaking'); };
+          ttsBtn.textContent='⏹️';
+          ttsBtn.classList.add('speaking');
+          window.speechSynthesis.speak(utterance);
+        };
+        if(window.speechSynthesis.getVoices().length){ trySpeak(); }
+        else { window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.onvoiceschanged=null; trySpeak(); }; }
       };
+      // pen inline-edit button
+      const editBtn=document.createElement('button');editBtn.className='edit-txt-btn';editBtn.title='Edit text';editBtn.textContent='✏️';
+      editBtn.onclick=()=>{
+        if(window.speechSynthesis.speaking){ window.speechSynthesis.cancel(); ttsBtn.textContent='🔊'; ttsBtn.classList.remove('speaking'); }
+        textEl.style.display='none';
+        btnGroup.style.display='none';
+        const ta=document.createElement('textarea');ta.className='inline-edit-ta';ta.value=block.content||'';
+        ta.rows=Math.max(4, (block.content||'').split('\n').length+1);
+        const actions=document.createElement('div');actions.className='inline-edit-actions';
+        const saveBtn=document.createElement('button');saveBtn.className='inline-save-btn';saveBtn.textContent='Save';
+        const cancelBtn=document.createElement('button');cancelBtn.className='inline-cancel-btn';cancelBtn.textContent='Cancel';
+        const finish=()=>{ ta.remove(); actions.remove(); textEl.style.display=''; btnGroup.style.display=''; };
+        saveBtn.onclick=()=>{ block.content=ta.value; textEl.innerHTML=renderMarkdown(block.content); markUnsaved(); finish(); };
+        cancelBtn.onclick=()=>finish();
+        actions.appendChild(saveBtn); actions.appendChild(cancelBtn);
+        wrap.appendChild(ta); wrap.appendChild(actions);
+        ta.focus();
+      };
+      const btnGroup=document.createElement('div');btnGroup.className='txt-btn-group';
+      btnGroup.appendChild(ttsBtn);btnGroup.appendChild(editBtn);
       wrap.appendChild(textEl);
-      wrap.appendChild(ttsBtn);
+      wrap.appendChild(btnGroup);
       container.appendChild(wrap);
     } else if(block.type==='line'){
       const el=document.createElement('div');el.className='block block-line';
@@ -5009,6 +5084,19 @@ function buildBlocks(blocks, container, entry){
       const lbl=document.createElement('span');lbl.className='block-line-label';lbl.textContent=block.label||'Line';hdr.appendChild(lbl);
       if(block.popularity){const pct=parseInt(block.popularity);const pw=document.createElement('div');pw.className='pop-wrap';pw.innerHTML=`<div class="pop-bar"><div class="pop-fill" style="width:${pct}%"></div></div><span class="pop-pct">${block.popularity}</span>`;hdr.appendChild(pw);}
       const actionGroup=document.createElement('div');actionGroup.className='line-action-group';
+      if(parentNavId){
+        const lineMapIco=document.createElement('button');lineMapIco.className='line-map-btn';lineMapIco.title='Find on map';lineMapIco.textContent='📍';
+        lineMapIco.onclick=()=>{
+          const overlay=document.getElementById('map-overlay');
+          if(!overlay.classList.contains('open')){
+            overlay.classList.add('open'); renderStats(); renderMap();
+            setTimeout(()=>{ if(window.mapFocusNavId) window.mapFocusNavId(parentNavId); }, 80);
+          } else {
+            if(window.mapFocusNavId) window.mapFocusNavId(parentNavId);
+          }
+        };
+        actionGroup.appendChild(lineMapIco);
+      }
       const practiceBtn=document.createElement('button');practiceBtn.className='hbtn';practiceBtn.type='button';practiceBtn.textContent='Practice';practiceBtn.onclick=()=>openPracticeSetup(block.moves||[], block.label||'Line');actionGroup.appendChild(practiceBtn);
       hdr.appendChild(actionGroup);
       el.appendChild(hdr);const body=document.createElement('div');body.className='block-line-body';body.appendChild(buildLineWidget(block.moves||[]));el.appendChild(body);container.appendChild(el);
@@ -5019,10 +5107,25 @@ function buildBlocks(blocks, container, entry){
       (block.tabs||[]).forEach((tab,i)=>{
         const btn=document.createElement('button');
         btn.className='tab-btn'+(i===0?' active':'');
-        btn.textContent=tab.label;
         if(tab._navId) btn.setAttribute('data-tab-nav-id', tab._navId);
+        const labelSpan=document.createElement('span');labelSpan.textContent=tab.label;
+        btn.appendChild(labelSpan);
+        if(tab._navId){
+          const mapIco=document.createElement('span');mapIco.className='tab-map-ico';mapIco.title='Find on map';mapIco.textContent='📍';
+          mapIco.addEventListener('click',e=>{
+            e.stopPropagation();
+            const overlay=document.getElementById('map-overlay');
+            if(!overlay.classList.contains('open')){
+              overlay.classList.add('open'); renderStats(); renderMap();
+              setTimeout(()=>{ if(window.mapFocusNavId) window.mapFocusNavId(tab._navId); }, 80);
+            } else {
+              if(window.mapFocusNavId) window.mapFocusNavId(tab._navId);
+            }
+          });
+          btn.appendChild(mapIco);
+        }
         const panel=document.createElement('div');panel.className='tab-panel'+(i===0?' active':'');
-        buildBlocks(tab.blocks||[],panel,entry);panels.push(panel);
+        buildBlocks(tab.blocks||[],panel,entry,tab._navId||parentNavId);panels.push(panel);
         btn.addEventListener('click',()=>{
           nav.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
           panels.forEach(p=>p.classList.remove('active'));
@@ -5826,61 +5929,92 @@ function buildMapNodes(){
 }
 
 function layoutNodes(nodes, links){
-  // Force-directed layout simulation
-  const W = document.getElementById('map-canvas-wrap').clientWidth;
-  const H = document.getElementById('map-canvas-wrap').clientHeight;
+  const W = document.getElementById('map-canvas-wrap').clientWidth || 1200;
+  const H = document.getElementById('map-canvas-wrap').clientHeight || 800;
 
-  // Initialize positions
-  nodes.forEach((n,i)=>{
-    const angle = (i / nodes.length) * Math.PI * 2;
-    const r = 200 + n.depth * 80;
-    n.x = W/2 + Math.cos(angle) * r + (Math.random()-0.5)*100;
-    n.y = H/2 + Math.sin(angle) * r + (Math.random()-0.5)*100;
-    n.vx = 0; n.vy = 0;
+  // Tag every node with its entry root id
+  const roots = nodes.filter(n => n.depth === 0);
+  function tagEntry(nid, entryId){
+    nodes[nid].entryId = entryId;
+    nodes.filter(n => n.parentId === nid).forEach(c => tagEntry(c.id, entryId));
+  }
+  roots.forEach(r => tagEntry(r.id, r.id));
+
+  // Place entry clusters far apart — grid if many, else spread on a large circle
+  const cols  = Math.ceil(Math.sqrt(roots.length));
+  const rows  = Math.ceil(roots.length / cols);
+  const cellW = W / cols;
+  const cellH = H / rows;
+  const clusterCenters = {};
+  roots.forEach((root, ri) => {
+    const col = ri % cols, row = Math.floor(ri / cols);
+    const cx = cellW * col + cellW / 2;
+    const cy = cellH * row + cellH / 2;
+    clusterCenters[root.id] = { cx, cy };
+    root.x = cx; root.y = cy; root.vx = 0; root.vy = 0;
   });
 
-  // Build adjacency for quick lookup
-  const adj = {};
-  links.forEach(l=>{ 
-    if(!adj[l.source]) adj[l.source]=[];
-    if(!adj[l.target]) adj[l.target]=[];
-    adj[l.source].push(l.target);
-    adj[l.target].push(l.source);
+  // Place children in a tight radial burst around their cluster center
+  function placeChildren(parentId, angle, spread){
+    const children = nodes.filter(n => n.parentId === parentId);
+    const p = nodes[parentId];
+    children.forEach((c, ci) => {
+      const a = angle + (ci - (children.length - 1) / 2) * spread;
+      const d = 100 + c.depth * 60;
+      c.x = p.x + Math.cos(a) * d + (Math.random() - 0.5) * 40;
+      c.y = p.y + Math.sin(a) * d + (Math.random() - 0.5) * 40;
+      c.vx = 0; c.vy = 0;
+      placeChildren(c.id, a, Math.max(0.2, spread * 0.55));
+    });
+  }
+  roots.forEach((root, ri) => {
+    const startAngle = (ri / Math.max(roots.length, 1)) * Math.PI * 2;
+    placeChildren(root.id, startAngle, Math.PI * 0.9);
   });
 
-  // Run simulation
-  for(let iter=0; iter<300; iter++){
-    // Repulsion
-    for(let i=0;i<nodes.length;i++){
-      for(let j=i+1;j<nodes.length;j++){
-        const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y;
-        const dist=Math.sqrt(dx*dx+dy*dy)||1;
-        const force=2000/(dist*dist);
-        const fx=dx/dist*force, fy=dy/dist*force;
-        nodes[i].vx+=fx; nodes[i].vy+=fy;
-        nodes[j].vx-=fx; nodes[j].vy-=fy;
+  // Simulation
+  for(let iter = 0; iter < 400; iter++){
+    const cool = Math.max(0.1, 1 - iter / 450);
+
+    // Repulsion — cross-entry repulsion is much stronger to keep clusters separate
+    for(let i = 0; i < nodes.length; i++){
+      for(let j = i + 1; j < nodes.length; j++){
+        const ni = nodes[i], nj = nodes[j];
+        const dx = ni.x - nj.x, dy = ni.y - nj.y;
+        const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+        const crossEntry = ni.entryId !== nj.entryId;
+        const strength = crossEntry
+          ? 80000 / (dist * dist)   // strong inter-cluster repulsion
+          :  5000 / (dist * dist);  // normal intra-cluster repulsion
+        const fx = dx/dist*strength, fy = dy/dist*strength;
+        ni.vx += fx; ni.vy += fy;
+        nj.vx -= fx; nj.vy -= fy;
       }
     }
-    // Attraction along links
-    links.forEach(l=>{
-      const a=nodes[l.source], b=nodes[l.target];
-      const dx=b.x-a.x, dy=b.y-a.y;
-      const dist=Math.sqrt(dx*dx+dy*dy)||1;
-      const ideal = 120 + b.depth*20;
-      const force=(dist-ideal)*0.04;
-      const fx=dx/dist*force, fy=dy/dist*force;
-      a.vx+=fx; a.vy+=fy;
-      b.vx-=fx; b.vy-=fy;
+
+    // Attraction along links (only intra-cluster links exist)
+    links.forEach(l => {
+      const a = nodes[l.source], b = nodes[l.target];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      const ideal = 90 + b.depth * 35;
+      const force = (dist - ideal) * 0.05;
+      const fx = dx/dist*force, fy = dy/dist*force;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
     });
-    // Center gravity
-    nodes.forEach(n=>{
-      n.vx += (W/2 - n.x)*0.003;
-      n.vy += (H/2 - n.y)*0.003;
+
+    // Each node is pulled gently toward its cluster center
+    nodes.forEach(n => {
+      const c = clusterCenters[n.entryId];
+      if(!c) return;
+      n.vx += (c.cx - n.x) * 0.004;
+      n.vy += (c.cy - n.y) * 0.004;
     });
-    // Apply velocity with damping
-    nodes.forEach(n=>{
-      n.x+=n.vx; n.y+=n.vy;
-      n.vx*=0.8; n.vy*=0.8;
+
+    nodes.forEach(n => {
+      n.x += n.vx * cool; n.y += n.vy * cool;
+      n.vx *= 0.8; n.vy *= 0.8;
     });
   }
 }
@@ -5995,6 +6129,24 @@ function renderMap(){
 
   function applyTransform(){ g.setAttribute('transform',`translate(${panX},${panY}) scale(${scale})`); }
 
+  const svgEl = svg;
+  window.mapFocusNavId = function(navId){
+    const node = nodes.find(n => String(n.navId) === String(navId));
+    if(!node) return;
+    const W = svgEl.clientWidth || 1200;
+    const H = svgEl.clientHeight || 800;
+    scale = 1.8;
+    panX = W/2 - node.x * scale;
+    panY = H/2 - node.y * scale;
+    applyTransform();
+    // Flash highlight
+    const grpEl = svgEl.querySelector(`[data-nav-id="${navId}"]`);
+    if(grpEl){
+      grpEl.style.filter='drop-shadow(0 0 12px #a594c0)';
+      setTimeout(()=>{ grpEl.style.filter=''; }, 1200);
+    }
+  };
+
   // Draw links
   const maxVar2 = Math.max(1, ...nodes.map(n=>n.varCount));
   links.forEach(l=>{
@@ -6024,6 +6176,7 @@ function renderMap(){
     const grp = document.createElementNS(ns,'g');
     grp.setAttribute('class','map-node');
     grp.setAttribute('transform',`translate(${n.x},${n.y})`);
+    if(n.navId) grp.setAttribute('data-nav-id', n.navId);
 
     // Glow circle
     const glow = document.createElementNS(ns,'circle');
@@ -6163,7 +6316,7 @@ async function loadEcoEntries(force=false){
   if(typeof fetch !== 'function'){
     ECO_CACHE = ECO_FALLBACK.slice();
     const added = ensureEcoEntries(ECO_CACHE);
-    if(added){ renderView(); if(document.getElementById('home-overlay')?.style.display === 'flex') openHome(); }
+    if(added){ renderView(); }
     return ECO_CACHE;
   }
 
@@ -6266,27 +6419,6 @@ async function ensureEcoList(force=false){
   }
 }
 
-function openHome(){
-  const overlay = document.getElementById('home-overlay');
-  overlay.style.display = 'flex';
-  const list = document.getElementById('home-entry-list');
-  if(!list) return;
-  list.innerHTML = '';
-  LINES.forEach((entry, i) => {
-    const card = document.createElement('div');
-    card.style.cssText = 'padding:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:border-color .15s,background .15s;';
-    card.onmouseenter = () => { card.style.borderColor = 'var(--accent)'; card.style.background = 'var(--bg3)'; };
-    card.onmouseleave = () => { card.style.borderColor = 'var(--border)'; card.style.background = 'var(--bg2)'; };
-    const tags = (entry.tags||[]).map(t => `<span style="font-size:10px;padding:2px 8px;background:rgba(165,148,192,.1);border:1px solid rgba(165,148,192,.25);border-radius:99px;color:var(--accent);">${t}</span>`).join('');
-    card.innerHTML = `<div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:6px;letter-spacing:-.01em;">${entry.title}</div><div style="font-size:11px;color:var(--muted);margin-bottom:10px;">${entry.date||''}</div><div style="display:flex;flex-wrap:wrap;gap:5px;">${tags}</div>`;
-    card.onclick = () => { closeHome(); document.getElementById(entry.id)?.scrollIntoView({behavior:'smooth'}); };
-    list.appendChild(card);
-  });
-  ensureEcoList(false);
-}
-function closeHome(){
-  document.getElementById('home-overlay').style.display = 'none';
-}
 function openContributors(){
   document.getElementById('contributors-overlay').style.display = 'flex';
 }
@@ -6294,18 +6426,55 @@ function closeContributors(){
   document.getElementById('contributors-overlay').style.display = 'none';
 }
 
-const homeBtn = document.getElementById('home-btn');
 const contributorsBtn = document.getElementById('contributors-btn');
-const ecoSearch = document.getElementById('eco-search');
-const ecoReloadBtn = document.getElementById('eco-reload-btn');
 
-if(homeBtn) homeBtn.addEventListener('click', openHome);
 if(contributorsBtn) contributorsBtn.addEventListener('click', openContributors);
-if(ecoSearch) ecoSearch.addEventListener('input', ()=>renderEcoList(ECO_CACHE || ECO_FALLBACK, ecoSearch.value));
-if(ecoReloadBtn) ecoReloadBtn.addEventListener('click', ()=>ensureEcoList(true));
 
-// Show homepage on first load
-openHome();
+// ─── Settings ────────────────────────────────────────────────────────
+const SETTINGS_KEY = 'ost_settings';
+const DEFAULTS = { sq: 56, textSize: 15 };
+
+function loadSettings(){
+  try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')); }
+  catch(e){ return {...DEFAULTS}; }
+}
+function saveSettings(s){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+function applySettings(s){
+  document.documentElement.style.setProperty('--sq', s.sq + 'px');
+  document.documentElement.style.setProperty('--text-size', s.textSize + 'px');
+}
+
+function openSettings(){
+  const s = loadSettings();
+  const overlay = document.getElementById('settings-overlay');
+  overlay.style.display = 'flex';
+
+  const slider = document.getElementById('sq-slider');
+  const sqVal  = document.getElementById('sq-val');
+  slider.value = s.sq;
+  sqVal.textContent = s.sq + 'px';
+  slider.oninput = () => {
+    sqVal.textContent = slider.value + 'px';
+    const ns = loadSettings(); ns.sq = parseInt(slider.value); saveSettings(ns); applySettings(ns);
+  };
+
+  const txtSlider = document.getElementById('txt-slider');
+  const txtVal    = document.getElementById('txt-val');
+  txtSlider.value = s.textSize;
+  txtVal.textContent = s.textSize + 'px';
+  txtSlider.oninput = () => {
+    txtVal.textContent = txtSlider.value + 'px';
+    const ns = loadSettings(); ns.textSize = parseInt(txtSlider.value); saveSettings(ns); applySettings(ns);
+  };
+}
+function closeSettings(){ document.getElementById('settings-overlay').style.display = 'none'; }
+function resetSettings(){ saveSettings({...DEFAULTS}); applySettings(DEFAULTS); openSettings(); }
+
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+
+// Apply saved settings on boot
+applySettings(loadSettings());
 </script>
 </body>
 </html>
