@@ -2400,6 +2400,15 @@ function positionHasSacrificeCandidate(node){
 }
 
 async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, frontierIndex, config, onFinding){
+  const emitFinding = typeof onFinding === 'function'
+    ? item => {
+        try {
+          onFinding(item);
+        } catch(err) {
+          console.error('Brilliant finder live render failed', err);
+        }
+      }
+    : null;
   const findingsKey = `${start.fen}|${start.turn}|${config.key}`;
   const cached = BRILLIANT_TT.findings.get(findingsKey);
   if(cached && cached.depth >= config.confirmDepth){
@@ -2407,8 +2416,8 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
       ...item,
       path: Array.isArray(item.path) ? item.path.slice() : []
     }));
-    if(typeof onFinding === 'function'){
-      cachedResults.forEach(item => onFinding({
+    if(emitFinding){
+      cachedResults.forEach(item => emitFinding({
         ...item,
         path: Array.isArray(item.path) ? item.path.slice() : []
       }));
@@ -2611,8 +2620,8 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
         pvSan: candidate.pvSan,
         reason: candidate.reason
       };
-      if(typeof onFinding === 'function'){
-        onFinding({
+      if(emitFinding){
+        emitFinding({
           ...found,
           path: Array.isArray(found.path) ? found.path.slice() : []
         });
@@ -2931,6 +2940,7 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
   card.appendChild(results);
 
   function renderFinding(item, baseMoves, foundKeys){
+    if(!item || !results?.isConnected) return false;
     const key = [...(item.path || []), item.san].join(' ');
     if(foundKeys.has(key)) return false;
     foundKeys.add(key);
@@ -3006,10 +3016,14 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
           status.textContent = `Checking replies for ${progress.san} (${progress.current}/${progress.total})`;
         }
       }, brilliantMode, item => {
-        if(renderFinding(item, baseMoves, foundKeys)){
-          liveFoundCount++;
-          status.textContent = `Found ${liveFoundCount} brilliant-move candidate${liveFoundCount === 1 ? '' : 's'} so far...`;
-          status.className = 'practice-status ok';
+        try {
+          if(renderFinding(item, baseMoves, foundKeys)){
+            liveFoundCount++;
+            status.textContent = `Found ${liveFoundCount} brilliant-move candidate${liveFoundCount === 1 ? '' : 's'} so far...`;
+            status.className = 'practice-status ok';
+          }
+        } catch(err) {
+          console.error('Brilliant finder could not render a live result', err);
         }
       });
       if(!findings.length){
