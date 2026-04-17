@@ -2071,18 +2071,18 @@ function analyzeFenPromise(fen, turn, depth = 18, options = {}){
   });
 }
 
-const BRILLIANT_SCAN_DEPTH = 12;
-const BRILLIANT_CONFIRM_DEPTH = 20;
-const BRILLIANT_REPLY_DEPTH = 20;
+const BRILLIANT_SCAN_DEPTH = 10;
+const BRILLIANT_CONFIRM_DEPTH = 16;
+const BRILLIANT_REPLY_DEPTH = 16;
 const BRILLIANT_NEAR_BEST_CP = 30;
 const BRILLIANT_STABILITY_CP = 45;
 const BRILLIANT_REPLY_DROP_CP = 60;
 const BRILLIANT_ALREADY_WINNING_CP = 350;
 const BRILLIANT_NOT_BAD_AFTER_CP = -40;
-const BRILLIANT_CONTINUATION_DEPTH = 22;
+const BRILLIANT_CONTINUATION_DEPTH = 18;
 const BRILLIANT_MIN_SAC_VALUE = 3;
 const BRILLIANT_MAX_RESULTS = 8;
-const BRILLIANT_MAX_SHORTLIST = 10;
+const BRILLIANT_MAX_SHORTLIST = 6;
 
 function scoreForMover(cp, mover){
   if(cp == null) return null;
@@ -3632,8 +3632,8 @@ const ENGINE = {
   lastFen: '',
 };
 
-const ENGINE_SEARCH_MS = 5000;
-const ENGINE_HARD_TIMEOUT_MS = 6500;
+const ENGINE_SEARCH_MS = 2800;
+const ENGINE_HARD_TIMEOUT_MS = 4200;
 const ENGINE_PV_CACHE_PLY = 16;
 
 function resetEngineState(){
