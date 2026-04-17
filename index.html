@@ -2085,6 +2085,8 @@ const BRILLIANT_MIN_SAC_VALUE = 1;
 const BRILLIANT_MAX_RESULTS = 8;
 const BRILLIANT_MAX_SHORTLIST = 6;
 const BRILLIANT_MAX_DEEP_REPLIES = 4;
+const BRILLIANT_TREE_MAX_PLY = 4;
+const BRILLIANT_TREE_NODE_CAP = 140;
 
 function scoreForMover(cp, mover){
   if(cp == null) return null;
@@ -2252,6 +2254,22 @@ async function analyzeReplyContinuation(replyState, mover, replyEval){
     san: continuationRes.san,
     pvSan: pvToSan(continuation.fen(), continuationEval?.pv || [], 8)
   };
+}
+
+function positionHasSacrificeCandidate(node){
+  const game = cloneGameFromFen(node?.fen);
+  if(!game) return false;
+  const legalMoves = game.moves({ verbose:true }) || [];
+  for(const move of legalMoves){
+    const nextGame = cloneGameFromFen(node.fen);
+    if(!nextGame) continue;
+    const res = nextGame.move(moveSpecFromVerbose(move));
+    if(!res) continue;
+    const postMoveReplies = nextGame.moves({ verbose:true }) || [];
+    const sac = classifySacrificeCandidate(node.board, res, node.turn, postMoveReplies);
+    if(sac.isMeaningfulSacrifice && !sac.capturedWasHanging) return true;
+  }
+  return false;
 }
 
 async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, frontierIndex){
@@ -2440,17 +2458,74 @@ async function findBrilliantMovesFromPosition(moves, onProgress){
   const start = states[states.length - 1];
   if(!start?.fen) return [];
 
-  const rootEval = await analyzeFenPromise(start.fen, start.turn, BRILLIANT_CONFIRM_DEPTH, { forceFresh:true });
-  if(!rootEval) return [];
+  const findings = [];
+  const seenNodes = new Set();
+  let exploredNodes = 0;
 
-  const findings = await findBrilliantCandidatesAtPosition({
+  async function visit(node, ply){
+    if(!node?.fen || ply > BRILLIANT_TREE_MAX_PLY || exploredNodes >= BRILLIANT_TREE_NODE_CAP) return;
+    const nodeKey = `${ply}|${node.fen}`;
+    if(seenNodes.has(nodeKey)) return;
+    seenNodes.add(nodeKey);
+    exploredNodes++;
+
+    if(typeof onProgress === 'function'){
+      onProgress({
+        stage:'tree',
+        depth: ply,
+        explored: exploredNodes,
+        total: BRILLIANT_TREE_NODE_CAP,
+        path: node.path || []
+      });
+    }
+
+    const game = cloneGameFromFen(node.fen);
+    if(!game) return;
+    const legalMoves = game.moves({ verbose:true }) || [];
+    if(!legalMoves.length) return;
+
+    if(positionHasSacrificeCandidate(node)){
+      const rootEval = await analyzeFenPromise(node.fen, node.turn, BRILLIANT_CONFIRM_DEPTH, { forceFresh:true });
+      if(rootEval){
+        const localFindings = await findBrilliantCandidatesAtPosition(node, rootEval, onProgress, ply);
+        findings.push(...localFindings);
+      }
+    }
+
+    if(ply >= BRILLIANT_TREE_MAX_PLY || exploredNodes >= BRILLIANT_TREE_NODE_CAP) return;
+
+    for(const move of legalMoves){
+      if(exploredNodes >= BRILLIANT_TREE_NODE_CAP) break;
+      const nextGame = cloneGameFromFen(node.fen);
+      if(!nextGame) continue;
+      const res = nextGame.move(moveSpecFromVerbose(move));
+      if(!res) continue;
+      await visit({
+        fen: nextGame.fen(),
+        turn: nextGame.turn(),
+        board: boardFromChessJs(nextGame),
+        path: [...(node.path || []), res.san]
+      }, ply + 1);
+    }
+  }
+
+  await visit({
     fen: start.fen,
     turn: start.turn,
     board: start.board,
     path: []
-  }, rootEval, onProgress, 0);
+  }, 0);
 
-  return findings
+  const deduped = [];
+  const seenFindings = new Set();
+  for(const item of findings){
+    const key = [...(item.path || []), item.san].join(' ');
+    if(seenFindings.has(key)) continue;
+    seenFindings.add(key);
+    deduped.push(item);
+  }
+
+  return deduped
     .sort((a, b) => (a.bestGap - b.bestGap) || (b.sacValue - a.sacValue) || (b.score - a.score))
     .slice(0, BRILLIANT_MAX_RESULTS);
 }
@@ -2659,6 +2734,10 @@ function openBrilliantMoveFinder(initialMoves = [], label = 'custom position'){
     try {
       const baseMoves = (block.moves || []).map(move => move.san).filter(Boolean);
       const findings = await findBrilliantMovesFromPosition(block.moves || [], progress => {
+        if(progress.stage === 'tree') {
+          status.textContent = `Scanning reply tree depth ${progress.depth} (${progress.explored}/${progress.total})`;
+          return;
+        }
         if(progress.stage === 'moves') {
           status.textContent = `Checking legal move ${progress.current} of ${progress.total}: ${progress.san}`;
           return;
