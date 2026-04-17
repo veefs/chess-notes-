@@ -15,9 +15,10 @@
 <header>
   <div class="logo">♟ FaithChess</div>
   <div class="nav">
-    <div class="nav-item active">Home</div>
+    <div class="nav-item active" onclick="window.location.href='index.html';">Home</div>
     <div class="nav-item">Play</div>
     <div class="nav-item">Puzzles</div>
+    <div class="nav-item" onclick="window.location.href='watch.html';">Watch</div>
     <div class="nav-item" onclick="window.location.href='theory.html';">Theory</div>
   </div>
 </header>
@@ -29,15 +30,26 @@
   <p>Openings. Tactics. Endgames. Built like a weapon.</p>
 </section>
 
-<section class="section">
-    <h2 style="margin-left: 29rem; margin-bottom: 5px;">Lichess TV</h2>
-  <div id="board"></div>
+<section class="section" style="margin-right: 0;">
+  <div class="board-wrap">
+
+    <div class="player-bar top" id="black-bar">
+      ⚫ Black
+    </div>
+
+    <div id="board"></div>
+
+    <div class="player-bar bottom" id="white-bar">
+      ⚪ White
+    </div>
+
+  </div>
 </section>
 
 </main>
 
 <footer>
-  © 2026 FaithChess — Built for serious players (PLACEHOLDER)
+  © 2026 FaithChess — Built for everyone
 </footer>
 
 <!-- dependencies FIRST -->

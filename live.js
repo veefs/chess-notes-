@@ -15,16 +15,25 @@ const game = new Chess();
 const board = Chessboard("board", {
   position: "start",
   draggable: false,
-  pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png"
+  pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
 });
 
+
+
 console.log("♟ Board ready");
+
+// =======================
+// UI ELEMENTS
+// =======================
+const whiteNameEl = document.getElementById("white-name");
+const blackNameEl = document.getElementById("black-name");
+const movesEl = document.getElementById("moves");
 
 // =======================
 // STATE
 // =======================
 let lastGameId = "";
-let lastMoves = [];
+let lastMovesLength = 0;
 
 // =======================
 // GET TV GAME ID
@@ -32,15 +41,10 @@ let lastMoves = [];
 async function getTVGameId() {
   try {
     const res = await fetch("https://lichess.org/api/tv/channels");
-
-    if (!res.ok) {
-      console.log("❌ TV channels error:", res.status);
-      return null;
-    }
-
     const data = await res.json();
 
-    const gameId = data?.rapid?.gameId; // change to blitz/bullet if wanted
+    const gameId =
+      data?.bullet?.gameId;
 
     console.log("📺 current TV game:", gameId);
 
@@ -52,87 +56,129 @@ async function getTVGameId() {
 }
 
 // =======================
-// FETCH GAME DATA (PGN + PLAYERS)
+// FETCH PGN (TEXT)
 // =======================
-async function fetchGameData(gameId) {
+async function fetchPGN(gameId) {
   try {
-    const url = `https://lichess.org/game/export/${gameId}`;
-
-    const res = await fetch(url);
-    if (!res.ok) return null;
-
-    // ❗ PGN is TEXT, not JSON
-    const pgn = await res.text();
-
-    return {
-      pgn
-    };
-
+    const res = await fetch(`https://lichess.org/game/export/${gameId}`);
+    return await res.text();
   } catch (e) {
-    console.log("❌ fetch failed:", e);
+    console.log("❌ PGN fetch failed:", e);
     return null;
   }
 }
 
 // =======================
-// APPLY MOVES INCREMENTALLY
+// PARSE PLAYER NAMES
+// =======================
+function parsePlayers(pgn) {
+  const whiteMatch = pgn.match(/\[White "([^"]+)"\]/);
+  const blackMatch = pgn.match(/\[Black "([^"]+)"\]/);
+
+  const whiteElo = pgn.match(/\[WhiteElo "([^"]+)"\]/);
+  const blackElo = pgn.match(/\[BlackElo "([^"]+)"\]/);
+
+  const whiteTitle = pgn.match(/\[WhiteTitle "([^"]+)"\]/);
+  const blackTitle = pgn.match(/\[BlackTitle "([^"]+)"\]/);
+
+  const whiteName = whiteMatch ? whiteMatch[1] : "White";
+  const blackName = blackMatch ? blackMatch[1] : "Black";
+
+  const wTitle = whiteTitle ? `<span class="title">${whiteTitle[1]}</span>` : "";
+  const bTitle = blackTitle ? `<span class="title">${blackTitle[1]}</span>` : "";
+
+  const wRating = whiteElo ? `<span class="rating">(${whiteElo[1]})</span>` : "";
+  const bRating = blackElo ? `<span class="rating">(${blackElo[1]})</span>` : "";
+
+  const whiteBar = document.getElementById("white-bar");
+  const blackBar = document.getElementById("black-bar");
+
+  if (whiteBar) {
+    whiteBar.innerHTML = `${wTitle}${whiteName} ${wRating}`;
+  }
+
+  if (blackBar) {
+    blackBar.innerHTML = `${bTitle}${blackName} ${bRating}`;
+  }
+}
+
+function clearHighlights() {
+  document.querySelectorAll(".highlight-square")
+    .forEach(el => el.classList.remove("highlight-square"));
+}
+
+function highlightSquare(square) {
+  const el = document.querySelector(`.square-${square}`);
+  if (el) el.classList.add("highlight-square");
+}
+
+// =======================
+// APPLY MOVES LIVE
 // =======================
 function applyMoves(pgn) {
   if (!pgn) return;
 
-  const moves = pgn
-    .split("\n")
-    .join(" ")
+  // remove headers
+  const moveText = pgn.split("\n\n")[1];
+  if (!moveText) return;
+
+  const moves = moveText
     .replace(/\{[^}]*\}/g, "")
-    .split(/\d+\./g)
-    .join(" ")
+    .replace(/\d+\./g, "")
     .trim()
-    .split(/\s+/)
-    .filter(m =>
-      m &&
-      !m.startsWith("[") &&
-      !m.includes("Event") &&
-      !m.includes("Site") &&
-      !m.includes("Round") &&
-      !m.includes("White") &&
-      !m.includes("Black") &&
-      !m.includes("Result")
-    );
+    .split(/\s+/);
 
-  for (let i = lastMoves.length; i < moves.length; i++) {
-    const move = game.move(moves[i]);
+  // only apply new moves
+  for (let i = lastMovesLength; i < moves.length; i++) {
+  const san = moves[i];
+  const move = game.move(san);
 
-    if (move) {
-      console.log("♟ move:", moves[i]);
-      board.position(game.fen());
-    }
+  if (move) {
+    console.log("♟ move:", san);
+
+    board.position(game.fen());
+
+    // clear old highlights
+    clearHighlights();
+
+    // highlight last move squares
+    highlightSquare(move.from);
+    highlightSquare(move.to);
   }
+}
 
-  lastMoves = moves;
+  lastMovesLength = moves.length;
+
+  // update move list UI
+  if (movesEl) {
+    movesEl.textContent = moves.join(" ");
+  }
 }
 
 // =======================
-// UPDATE LOOP
+// MAIN LOOP
 // =======================
 async function update() {
   const gameId = await getTVGameId();
   if (!gameId) return;
 
+  // new game detected
   if (gameId !== lastGameId) {
-    console.log("🔥 NEW TV GAME:", gameId);
+    console.log("🔥 NEW GAME:", gameId);
 
     lastGameId = gameId;
     game.reset();
-    lastMoves = [];
     board.position("start");
+    lastMovesLength = 0;
   }
 
-  const data = await fetchGameData(gameId);
+  const pgn = await fetchPGN(gameId);
+  if (!pgn) return;
 
-  if (!data?.pgn) return;
-
-  applyMoves(data.pgn);
+  parsePlayers(pgn);
+  applyMoves(pgn);
 }
+
 // =======================
 // START
 // =======================
