@@ -2079,6 +2079,8 @@ const BRILLIANT_STABILITY_CP = 45;
 const BRILLIANT_REPLY_DROP_CP = 60;
 const BRILLIANT_ALREADY_WINNING_CP = 350;
 const BRILLIANT_NOT_BAD_AFTER_CP = -40;
+const BRILLIANT_CONTINUATION_DEPTH = 22;
+const BRILLIANT_MIN_SAC_VALUE = 3;
 const BRILLIANT_MAX_RESULTS = 8;
 const BRILLIANT_MAX_SHORTLIST = 10;
 
@@ -2199,14 +2201,48 @@ function classifySacrificeCandidate(startBoard, res, mover, postMoveReplies){
   const quietOfferValue = !capturedValue && destinationDefended && recaptureExists ? movedPieceValue : 0;
   const apparentSacValue = destinationDefended && recaptureExists && movedPieceValue > capturedValue ? (movedPieceValue - capturedValue) : 0;
   const sacValue = Math.max(quietOfferValue, apparentSacValue);
+  const isRealSacrifice = destinationDefended && recaptureExists;
+  const isMeaningfulSacrifice = isRealSacrifice && movedPieceValue >= 3 && sacValue >= BRILLIANT_MIN_SAC_VALUE;
 
   return {
     movedPieceValue,
     capturedValue,
+    destinationDefended,
     capturedWasHanging,
     recaptureExists,
     sacValue,
+    isRealSacrifice,
+    isMeaningfulSacrifice,
     reason: quietOfferValue > apparentSacValue ? brilliantReasonFromSacrifice(quietOfferValue) : brilliantReasonFromSacrifice(apparentSacValue || quietOfferValue)
+  };
+}
+
+function replyAcceptsSacrifice(reply, candidate){
+  return !!reply?.captured && reply.to === candidate.to;
+}
+
+async function analyzeReplyContinuation(replyState, mover, replyEval){
+  const firstPvMove = Array.isArray(replyEval?.pv) ? replyEval.pv[0] : '';
+  if(!firstPvMove) return null;
+
+  const continuation = cloneGameFromFen(replyState.fen());
+  if(!continuation) return null;
+  const continuationRes = applyUciMove(continuation, firstPvMove);
+  if(!continuationRes) return null;
+
+  const continuationEval = await analyzeFenPromise(
+    continuation.fen(),
+    continuation.turn(),
+    BRILLIANT_CONTINUATION_DEPTH,
+    { forceFresh:true }
+  );
+  const continuationScore = scoreForMover(payloadToCp(continuationEval), mover);
+  if(continuationScore == null) return null;
+
+  return {
+    score: continuationScore,
+    san: continuationRes.san,
+    pvSan: pvToSan(continuation.fen(), continuationEval?.pv || [], 8)
   };
 }
 
@@ -2240,7 +2276,7 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
 
     const postMoveReplies = nextGame.moves({ verbose:true }) || [];
     const sac = classifySacrificeCandidate(start.board, res, mover, postMoveReplies);
-    if(sac.sacValue < 1) continue;
+    if(!sac.isMeaningfulSacrifice) continue;
     if(sac.capturedWasHanging) continue;
 
     const shallowEval = await analyzeFenPromise(nextGame.fen(), nextGame.turn(), BRILLIANT_SCAN_DEPTH);
@@ -2262,6 +2298,7 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
       stability: (shallowScore == null || deepScore == null) ? null : Math.abs(deepScore - shallowScore),
       pvSan: pvToSan(nextGame.fen(), deepEval?.pv || [], 8),
       afterFen: nextGame.fen(),
+      to: res.to,
       reason: res.captured ? `Apparent ${sac.reason.toLowerCase()}` : sac.reason
     });
   }
@@ -2279,10 +2316,14 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     const candidate = shortlist[i];
     const replyGame = cloneGameFromFen(candidate.afterFen);
     if(!replyGame) continue;
-    const replies = replyGame.moves({ verbose:true }) || [];
+    const replies = (replyGame.moves({ verbose:true }) || []).slice().sort((a, b) => {
+      return Number(replyAcceptsSacrifice(b, candidate)) - Number(replyAcceptsSacrifice(a, candidate));
+    });
 
     let worstReplyScore = candidate.deepScore;
     let worstReplySan = '';
+    let worstContinuationSan = '';
+    let foundAcceptance = false;
 
     for(let j = 0; j < replies.length; j++){
       const reply = replies[j];
@@ -2302,13 +2343,17 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
       if(!replyState) continue;
       const replyRes = replyState.move(moveSpecFromVerbose(reply));
       if(!replyRes) continue;
+      if(replyAcceptsSacrifice(reply, candidate)) foundAcceptance = true;
 
       const replyEval = await analyzeFenPromise(replyState.fen(), replyState.turn(), BRILLIANT_REPLY_DEPTH, { forceFresh:true });
       const replyScore = scoreForMover(payloadToCp(replyEval), mover);
       if(replyScore == null) continue;
-      if(replyScore < worstReplyScore){
-        worstReplyScore = replyScore;
+      const continuation = await analyzeReplyContinuation(replyState, mover, replyEval);
+      const resolvedScore = continuation?.score ?? replyScore;
+      if(resolvedScore < worstReplyScore){
+        worstReplyScore = resolvedScore;
         worstReplySan = replyRes.san;
+        worstContinuationSan = continuation?.san || '';
       }
     }
 
@@ -2317,8 +2362,9 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
     const replyHolds = worstReplyScore >= candidate.deepScore - BRILLIANT_REPLY_DROP_CP;
     const notBadAfterMove = worstReplyScore >= BRILLIANT_NOT_BAD_AFTER_CP;
     const stillNearBestAfterDefense = rootScore == null ? true : worstReplyScore >= rootScore - BRILLIANT_NEAR_BEST_CP;
+    const sacrificeCanBeAccepted = foundAcceptance;
 
-    if(notAlreadyWinning && stableEnough && replyHolds && notBadAfterMove && stillNearBestAfterDefense){
+    if(notAlreadyWinning && stableEnough && replyHolds && notBadAfterMove && stillNearBestAfterDefense && sacrificeCanBeAccepted){
       findings.push({
         path: (start.path || []).slice(),
         pathPly: frontierIndex,
@@ -2330,6 +2376,7 @@ async function findBrilliantCandidatesAtPosition(start, rootEval, onProgress, fr
         bestGap: bestScore - candidate.deepScore,
         worstReplySan,
         worstReplyScore,
+        worstContinuationSan,
         stability: candidate.stability,
         pvSan: candidate.pvSan,
         reason: candidate.reason
