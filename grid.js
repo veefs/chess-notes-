@@ -1,8 +1,3 @@
-console.log("🚀 live.js loaded");
-
-// =======================
-// BOARD SETUP
-// =======================
 const boardIds = ["board1", "board2", "board3", "board4"];
 
 const instances = boardIds.map((id) => {
@@ -24,9 +19,6 @@ const instances = boardIds.map((id) => {
 
 console.log("♟ 4 independent boards ready");
 
-// =======================
-// FETCH TV GAME ID (we'll reuse same pool)
-// =======================
 async function getTVGames() {
   const res = await fetch("https://lichess.org/api/tv/channels");
   const data = await res.json();
@@ -39,17 +31,11 @@ async function getTVGames() {
   ].filter(Boolean);
 }
 
-// =======================
-// FETCH PGN
-// =======================
 async function fetchPGN(gameId) {
   const res = await fetch(`https://lichess.org/game/export/${gameId}`);
   return await res.text();
 }
 
-// =======================
-// PARSE PLAYERS (per board UI)
-// =======================
 function parsePlayers(pgn, prefix) {
   const whiteMatch = pgn.match(/\[White "([^"]+)"\]/);
   const blackMatch = pgn.match(/\[Black "([^"]+)"\]/);
@@ -80,9 +66,6 @@ function parsePlayers(pgn, prefix) {
     blackBar.innerHTML = `${bTitle}${blackName} ${bRating}`;
   }
 }
-// =======================
-// HIGHLIGHTS PER BOARD
-// =======================
 function clearHighlights(boardId) {
   document
     .querySelectorAll(`#${boardId} .highlight-square`)
@@ -94,9 +77,6 @@ function highlightSquare(boardId, square) {
   if (el) el.classList.add("highlight-square");
 }
 
-// =======================
-// APPLY MOVES PER BOARD
-// =======================
 function applyMoves(instance, pgn) {
   const moveText = pgn.split("\n\n")[1];
   if (!moveText) return;
@@ -123,9 +103,6 @@ function applyMoves(instance, pgn) {
   instance.lastMovesLength = moves.length;
 }
 
-// =======================
-// MAIN LOOP
-// =======================
 async function update() {
   const gameIds = await getTVGames();
 
@@ -135,7 +112,6 @@ async function update() {
 
     if (!gameId) continue;
 
-    // new game for this board
     if (inst.gameId !== gameId) {
       inst.gameId = gameId;
       inst.game.reset();
@@ -151,8 +127,5 @@ async function update() {
   }
 }
 
-// =======================
-// START
-// =======================
 update();
 setInterval(update, 3000);

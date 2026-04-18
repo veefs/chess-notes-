@@ -1,8 +1,5 @@
 console.log("🚀 live.js loaded");
 
-// =======================
-// BOARD INIT
-// =======================
 const boardEl = document.getElementById("board");
 
 if (!boardEl) {
@@ -22,22 +19,13 @@ const board = Chessboard("board", {
 
 console.log("♟ Board ready");
 
-// =======================
-// UI ELEMENTS
-// =======================
 const whiteNameEl = document.getElementById("white-name");
 const blackNameEl = document.getElementById("black-name");
 const movesEl = document.getElementById("moves");
 
-// =======================
-// STATE
-// =======================
 let lastGameId = "";
 let lastMovesLength = 0;
 
-// =======================
-// GET TV GAME ID
-// =======================
 async function getTVGameId() {
   try {
     const res = await fetch("https://lichess.org/api/tv/channels");
@@ -55,9 +43,6 @@ async function getTVGameId() {
   }
 }
 
-// =======================
-// FETCH PGN (TEXT)
-// =======================
 async function fetchPGN(gameId) {
   try {
     const res = await fetch(`https://lichess.org/game/export/${gameId}`);
@@ -68,9 +53,6 @@ async function fetchPGN(gameId) {
   }
 }
 
-// =======================
-// PARSE PLAYER NAMES
-// =======================
 function parsePlayers(pgn) {
   const whiteMatch = pgn.match(/\[White "([^"]+)"\]/);
   const blackMatch = pgn.match(/\[Black "([^"]+)"\]/);
@@ -112,13 +94,9 @@ function highlightSquare(square) {
   if (el) el.classList.add("highlight-square");
 }
 
-// =======================
-// APPLY MOVES LIVE
-// =======================
 function applyMoves(pgn) {
   if (!pgn) return;
 
-  // remove headers
   const moveText = pgn.split("\n\n")[1];
   if (!moveText) return;
 
@@ -128,7 +106,6 @@ function applyMoves(pgn) {
     .trim()
     .split(/\s+/);
 
-  // only apply new moves
   for (let i = lastMovesLength; i < moves.length; i++) {
   const san = moves[i];
   const move = game.move(san);
@@ -138,10 +115,8 @@ function applyMoves(pgn) {
 
     board.position(game.fen());
 
-    // clear old highlights
     clearHighlights();
 
-    // highlight last move squares
     highlightSquare(move.from);
     highlightSquare(move.to);
   }
@@ -155,9 +130,6 @@ function applyMoves(pgn) {
   }
 }
 
-// =======================
-// MAIN LOOP
-// =======================
 async function update() {
   const gameId = await getTVGameId();
   if (!gameId) return;
@@ -179,8 +151,5 @@ async function update() {
   applyMoves(pgn);
 }
 
-// =======================
-// START
-// =======================
 update();
 setInterval(update, 3000);
