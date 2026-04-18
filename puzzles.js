@@ -133,8 +133,7 @@ async function fetchPuzzle() {
 
   poolLoading = true;
 
-  const res = await fetch("lichess_db_puzzles.csv");
-  const reader = res.body.getReader();
+  const res = await fetch("https://media.githubusercontent.com/media/veefs/chess-notes-/refs/heads/main/lichess_db_puzzles.csv"); const reader = res.body.getReader();
   const decoder = new TextDecoder();
 
   let buffer = "";
