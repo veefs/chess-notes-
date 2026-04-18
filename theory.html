@@ -1381,44 +1381,6 @@ document.getElementById('save-btn').addEventListener('click', () => {
   document.getElementById('save-modal').style.display = 'flex';
 });
 
-document.getElementById('save-modal-local').addEventListener('click', () => {
-  document.getElementById('save-modal').style.display = 'none';
-  doLocalSave();
-});
-
-document.getElementById('save-modal-cancel').addEventListener('click', () => {
-  document.getElementById('save-modal').style.display = 'none';
-  document.getElementById('save-modal-note').value = '';
-});
-
-document.getElementById('save-modal-submit').addEventListener('click', async () => {
-  const note = document.getElementById('save-modal-note').value.trim();
-  const json = JSON.stringify(LINES, null, 2);
-  const file = new File([json], currentFilename, {type: 'application/json'});
-  const fd = new FormData();
-  fd.append('file', file);
-  fd.append('payload_json', JSON.stringify({
-    username: 'FaithChess Submissions',
-    content: note ? ('**New submission**\n' + note) : '**New submission** _(no note)_'
-  }));
-  const btn = document.getElementById('save-modal-submit');
-  btn.textContent = 'Sending…';
-  btn.disabled = true;
-  try {
-    const res = await fetch(WEBHOOK_URL, {method: 'POST', body: fd});
-    if (res.ok) {
-      document.getElementById('save-modal').style.display = 'none';
-      document.getElementById('save-modal-note').value = '';
-      toast('Submitted for review!', 'ok');
-    } else {
-      toast('Discord error ' + res.status, 'err');
-    }
-  } catch(e) {
-    toast('Network error — save locally instead', 'err');
-  }
-  btn.textContent = 'Submit for review';
-  btn.disabled = false;
-});
 
 // ─── Chess Engine ────────────────────────────────────────────────────
 const BASE='https://lichess1.org/assets/piece/cburnett/';
@@ -6560,6 +6522,37 @@ applySettings(loadSettings());
     <button id="save-modal-cancel" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;">Cancel</button>
   </div>
 </div>
+
+<script>
+document.getElementById('save-modal-local').addEventListener('click', function() {
+  document.getElementById('save-modal').style.display = 'none';
+  doLocalSave();
+});
+document.getElementById('save-modal-cancel').addEventListener('click', function() {
+  document.getElementById('save-modal').style.display = 'none';
+  document.getElementById('save-modal-note').value = '';
+});
+document.getElementById('save-modal-submit').addEventListener('click', async function() {
+  var note = document.getElementById('save-modal-note').value.trim();
+  var fd = new FormData();
+  fd.append('file', new File([JSON.stringify(LINES, null, 2)], currentFilename, {type:'application/json'}));
+  fd.append('payload_json', JSON.stringify({
+    username: 'FaithChess Submissions',
+    content: note ? ('**New submission**\n' + note) : '**New submission** _(no note)_'
+  }));
+  var btn = document.getElementById('save-modal-submit');
+  btn.textContent = 'Sending…'; btn.disabled = true;
+  try {
+    var res = await fetch(WEBHOOK_URL, {method:'POST', body:fd});
+    if (res.ok) {
+      document.getElementById('save-modal').style.display = 'none';
+      document.getElementById('save-modal-note').value = '';
+      toast('Submitted for review!', 'ok');
+    } else { toast('Discord error ' + res.status, 'err'); }
+  } catch(e) { toast('Network error — save locally instead', 'err'); }
+  btn.textContent = 'Submit for review'; btn.disabled = false;
+});
+</script>
 </body>
 </html>
 
