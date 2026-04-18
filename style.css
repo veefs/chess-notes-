@@ -458,3 +458,36 @@ footer {
   inset: 0;
   background: rgba(0, 255, 120, 0.25);
 }
+
+.highlight-square {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* make squares position:relative so ::after works */
+.square-55d63 {
+  position: relative;
+}
+
+.highlight-green::after,
+.highlight-red::after,
+.highlight-blue::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.highlight-green::after {
+  background: rgba(0, 255, 120, 0.45);
+}
+
+.highlight-red::after {
+  background: rgba(255, 60, 60, 0.45);
+}
+
+.highlight-blue::after {
+  background: rgba(120, 180, 255, 0.35);
+}
