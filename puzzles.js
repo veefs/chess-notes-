@@ -157,7 +157,7 @@ async function fetchPuzzle() {
       const p = splitCSVLine(line);
       if (p.length < 4) continue;
 
-      if (Math.random() < 0.00005) {
+      if (Math.random() < 0.01) {
         collected.push({
           id: p[0],
           fen: p[1],
