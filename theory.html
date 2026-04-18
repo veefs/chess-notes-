@@ -1399,8 +1399,7 @@ document.getElementById('save-modal-submit').addEventListener('click', async () 
   fd.append('file', file);
   fd.append('payload_json', JSON.stringify({
     username: 'FaithChess Submissions',
-    content: note ? ('**New submission**
-' + note) : '**New submission** _(no note)_'
+    content: note ? ('**New submission**\n' + note) : '**New submission** _(no note)_'
   }));
   const btn = document.getElementById('save-modal-submit');
   btn.textContent = 'Sending…';
