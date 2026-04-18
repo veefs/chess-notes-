@@ -6,6 +6,7 @@ console.log("🧩 Lichess ELO puzzle system loaded");
 let puzzle = null;
 let step = 0;
 let streak = 0;
+let inputLocked = false;
 
 // =======================
 // GAME + BOARD
@@ -24,12 +25,72 @@ const board = Chessboard("board", {
 });
 
 // =======================
-// UI
+// SAFE UI (NO CRASHES)
+// =======================
+const UI = {
+  side: () => document.getElementById("sideToMove"),
+  rating: () => document.getElementById("puzzleRating"),
+  streak: () => document.getElementById("puzzleStreak"),
+};
+
+// =======================
+// UPDATE UI
+// =======================
+function updateUI() {
+  if (!puzzle) return;
+
+  const side = UI.side();
+  const rating = UI.rating();
+  const streakEl = UI.streak();
+
+  if (side) side.textContent = game.turn() === "w" ? "White" : "Black";
+  if (rating) rating.textContent = puzzle.rating ?? "-";
+  if (streakEl) streakEl.textContent = streak;
+}
+
+// =======================
+// POPUP
 // =======================
 const popup = document.getElementById("puzzle-popup");
-const sideEl = document.getElementById("sideToMove");
-const ratingEl = document.getElementById("puzzleRating");
-const streakEl = document.getElementById("puzzleStreak");
+
+// Retry = restart SAME puzzle (fixed)
+document.getElementById("retryBtn").onclick = () => {
+  popup.classList.add("hidden");
+  inputLocked = false;
+
+  if (!puzzle) return;
+
+  step = 0;
+  game.load(puzzle.fen);
+  board.position(puzzle.fen, false);
+
+  updateUI();
+};
+
+// Exit = new puzzle + reset streak
+document.getElementById("exitBtn").onclick = () => {
+  popup.classList.add("hidden");
+  streak = 0;
+  start();
+};
+
+// =======================
+// SOLUTION BUTTON (FIXED)
+// =======================
+document.getElementById("solutionBtn").onclick = () => {
+  if (!puzzle) return;
+
+  inputLocked = true;
+  streak = 0;
+  updateUI();
+
+  const san = convertToSAN(puzzle.fen, puzzle.solution);
+
+  console.log("📖 SOLUTION:");
+  console.log(san.join(" → "));
+
+  alert("Solution:\n\n" + san.join(" → "));
+};
 
 // =======================
 // SOUND
@@ -48,94 +109,35 @@ function playSound(t) {
 }
 
 // =======================
-// BUTTONS
-// =======================
-
-// RETRY → reload SAME puzzle (fix)
-document.getElementById("retryBtn").onclick = () => {
-  popup.classList.add("hidden");
-
-  if (!puzzle) return;
-
-  step = 0;
-  game.load(puzzle.fen);
-  board.position(puzzle.fen, false);
-
-  console.log("🔁 puzzle reset");
-};
-
-// EXIT → new puzzle + reset streak
-document.getElementById("exitBtn").onclick = () => {
-  popup.classList.add("hidden");
-
-  streak = 0;
-  start();
-};
-
-// =======================
-// SOLUTION BUTTON (NEW)
-// =======================
-document.getElementById("solutionBtn").onclick = () => {
-  if (!puzzle) return;
-
-  streak = 0; // ends streak immediately
-  updateUI();
-
-  const sanMoves = convertSolutionToSAN(puzzle.fen, puzzle.solution);
-
-  console.log("📖 Solution (SAN):");
-  console.log(sanMoves.join(" → "));
-
-  alert("Solution:\n\n" + sanMoves.join(" → "));
-};
-
-// =======================
 // FETCH PUZZLE
 // =======================
 async function fetchPuzzle() {
-  const res = await fetch("https://lichess.org/api/puzzle/next");
-  const data = await res.json();
+  try {
+    const res = await fetch("https://lichess.org/api/puzzle/next");
+    const data = await res.json();
 
-  const p = data.puzzle;
-  const g = data.game;
+    const p = data.puzzle;
+    const g = data.game;
 
-  if (!p || !g?.pgn) return null;
+    if (!p || !g?.pgn) return null;
 
-  const fen = buildFenFromGame(g.pgn, p.initialPly);
+    const fen = buildFen(g.pgn, p.initialPly);
 
-  return {
-    fen,
-    solution: p.solution, // UCI
-    rating: p.rating,
-    turn: fen.split(" ")[1] === "w" ? "White" : "Black",
-  };
-}
-
-// =======================
-// SAN CONVERSION (IMPORTANT FIX)
-// =======================
-function convertSolutionToSAN(fen, solution) {
-  const g = new Chess(fen);
-  const san = [];
-
-  for (const uci of solution) {
-    const move = g.move({
-      from: uci.slice(0, 2),
-      to: uci.slice(2, 4),
-      promotion: uci[4] || "q",
-    });
-
-    if (!move) break;
-    san.push(move.san);
+    return {
+      fen,
+      solution: p.solution,
+      rating: p.rating,
+    };
+  } catch (e) {
+    console.log("❌ fetch error", e);
+    return null;
   }
-
-  return san;
 }
 
 // =======================
 // BUILD FEN
 // =======================
-function buildFenFromGame(pgn, ply) {
+function buildFen(pgn, ply) {
   const g = new Chess();
 
   const moves = pgn
@@ -155,11 +157,33 @@ function buildFenFromGame(pgn, ply) {
 }
 
 // =======================
+// UCI → SAN (FIXED)
+// =======================
+function convertToSAN(fen, solution) {
+  const g = new Chess(fen);
+  const out = [];
+
+  for (const uci of solution) {
+    const move = g.move({
+      from: uci.slice(0, 2),
+      to: uci.slice(2, 4),
+      promotion: uci[4] || "q",
+    });
+
+    if (!move) break;
+    out.push(move.san);
+  }
+
+  return out;
+}
+
+// =======================
 // LOAD PUZZLE
 // =======================
 function loadPuzzle(p) {
   puzzle = p;
   step = 0;
+  inputLocked = false;
 
   game.load(p.fen);
   board.position(p.fen, false);
@@ -167,17 +191,6 @@ function loadPuzzle(p) {
   updateUI();
 
   console.log("✅ Puzzle loaded");
-}
-
-// =======================
-// UI UPDATE
-// =======================
-function updateUI() {
-  if (!puzzle) return;
-
-  sideEl.textContent = puzzle.turn;
-  ratingEl.textContent = puzzle.rating;
-  streakEl.textContent = streak;
 }
 
 // =======================
@@ -195,6 +208,8 @@ function highlight(square, cls) {
 // MOVE HANDLER
 // =======================
 function onDrop(source, target) {
+  if (inputLocked || !puzzle) return "snapback";
+
   const move = game.move({
     from: source,
     to: target,
@@ -208,24 +223,29 @@ function onDrop(source, target) {
   const played = source + target + (move.promotion || "");
   const expected = puzzle.solution[step];
 
-  // WRONG
+  // WRONG MOVE
   if (played !== expected) {
+    inputLocked = true;
+
     highlight(target, "wrong-square");
+
     popup.classList.remove("hidden");
+
     streak = 0;
     updateUI();
+
     return;
   }
 
-  // CORRECT
+  // CORRECT MOVE
   highlight(target, "correct-square");
-  playSound(move.flags.includes("c") ? "capture" : "move");
 
+  playSound(move.flags.includes("c") ? "capture" : "move");
   if (game.in_check()) playSound("check");
 
   step++;
 
-  // AUTO OPPONENT
+  // OPPONENT MOVE
   setTimeout(() => {
     if (step >= puzzle.solution.length) {
       streak++;
@@ -246,7 +266,6 @@ function onDrop(source, target) {
       board.position(game.fen(), false);
 
       playSound(reply.flags.includes("c") ? "capture" : "move");
-
       if (game.in_check()) playSound("check");
 
       step++;
@@ -258,6 +277,8 @@ function onDrop(source, target) {
 // START
 // =======================
 async function start() {
+  inputLocked = false;
+
   const p = await fetchPuzzle();
 
   if (!p) {
