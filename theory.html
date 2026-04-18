@@ -1198,27 +1198,6 @@ body.brilliant-page-open > footer {
 </div>
 
 <div class="toast" id="toast"></div>
-<!-- SUBMIT FOR REVIEW MODAL -->
-<div id="submit-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900;align-items:center;justify-content:center;">
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:32px;max-width:440px;width:90%;box-shadow:0 24px 60px rgba(0,0,0,.5);">
-    <div style="font-size:17px;font-weight:700;color:var(--text2);margin-bottom:6px;">Save JSON</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:24px;">Download a local copy or submit your changes for review by the FaithChess team.</div>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
-      <button id="submit-local-btn" class="hbtn primary-btn" style="justify-content:center;padding:12px;">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6v7a1 1 0 001 1h10a1 1 0 001-1V6"/><polyline points="5 2 5 7 11 7 11 2"/><polyline points="11 2 14 2 14 6 2 6 2 2 5 2"/></svg>
-        Save locally
-      </button>
-      <div style="position:relative;">
-        <textarea id="submit-note" placeholder="Optional: describe what you changed or added…" style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:10px 12px;font-size:13px;font-family:inherit;resize:vertical;min-height:72px;outline:none;"></textarea>
-      </div>
-      <button id="submit-discord-btn" class="hbtn" style="justify-content:center;padding:12px;border-color:rgba(88,101,242,.5);color:#8b9cf4;">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 3a1 1 0 00-1-1H4a1 1 0 00-1 1v7a1 1 0 001 1h7l3 3V3z"/></svg>
-        Submit for review
-      </button>
-    </div>
-    <button onclick="closeSubmitModal()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;">Cancel</button>
-  </div>
-</div>
 <input type="file" id="file-inp" accept=".json" style="display:none">
 
 <!-- SETTINGS OVERLAY -->
@@ -1385,51 +1364,61 @@ document.getElementById('file-inp').addEventListener('change', e => {
   e.target.value = '';
 });
 
+// ─── Save / Submit ───────────────────────────────────────────────────
 const WEBHOOK_URL = 'https://discord.com/api/webhooks/1495145721655988436/VmGzeuR-VYRH21adIMPCk3koKguuUcE1v0PtAEsA96ZT0xnHt9cjFMNQBr3WV6VNN4h9';
 
-function openSubmitModal(){ document.getElementById('submit-overlay').style.display='flex'; }
-function closeSubmitModal(){ document.getElementById('submit-overlay').style.display='none'; document.getElementById('submit-note').value=''; }
-
-document.getElementById('save-btn').addEventListener('click', openSubmitModal);
-
-document.getElementById('submit-local-btn').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(LINES, null, 2)], {type:'application/json'});
+function doLocalSave() {
+  const blob = new Blob([JSON.stringify(LINES, null, 2)], {type: 'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = currentFilename;
   a.click();
   markSaved();
-  closeSubmitModal();
   toast('Saved ' + currentFilename, 'ok');
+}
+
+document.getElementById('save-btn').addEventListener('click', () => {
+  document.getElementById('save-modal').style.display = 'flex';
 });
 
-document.getElementById('submit-discord-btn').addEventListener('click', async () => {
-  const note = document.getElementById('submit-note').value.trim();
+document.getElementById('save-modal-local').addEventListener('click', () => {
+  document.getElementById('save-modal').style.display = 'none';
+  doLocalSave();
+});
+
+document.getElementById('save-modal-cancel').addEventListener('click', () => {
+  document.getElementById('save-modal').style.display = 'none';
+  document.getElementById('save-modal-note').value = '';
+});
+
+document.getElementById('save-modal-submit').addEventListener('click', async () => {
+  const note = document.getElementById('save-modal-note').value.trim();
   const json = JSON.stringify(LINES, null, 2);
-  const file = new File([json], currentFilename, {type:'application/json'});
+  const file = new File([json], currentFilename, {type: 'application/json'});
   const fd = new FormData();
   fd.append('file', file);
   fd.append('payload_json', JSON.stringify({
     username: 'FaithChess Submissions',
-    content: note ? `**New submission**
-${note}` : '**New submission** _(no note)_'
+    content: note ? ('**New submission**
+' + note) : '**New submission** _(no note)_'
   }));
-  const btn = document.getElementById('submit-discord-btn');
-  btn.textContent = 'Sending…'; btn.disabled = true;
+  const btn = document.getElementById('save-modal-submit');
+  btn.textContent = 'Sending…';
+  btn.disabled = true;
   try {
-    const res = await fetch(WEBHOOK_URL, {method:'POST', body:fd});
-    if(res.ok){
-      closeSubmitModal();
+    const res = await fetch(WEBHOOK_URL, {method: 'POST', body: fd});
+    if (res.ok) {
+      document.getElementById('save-modal').style.display = 'none';
+      document.getElementById('save-modal-note').value = '';
       toast('Submitted for review!', 'ok');
     } else {
       toast('Discord error ' + res.status, 'err');
     }
   } catch(e) {
-    toast('Network error — try saving locally', 'err');
-  } finally {
-    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 3a1 1 0 00-1-1H4a1 1 0 00-1 1v7a1 1 0 001 1h7l3 3V3z"/></svg> Submit for review';
-    btn.disabled = false;
+    toast('Network error — save locally instead', 'err');
   }
+  btn.textContent = 'Submit for review';
+  btn.disabled = false;
 });
 
 // ─── Chess Engine ────────────────────────────────────────────────────
@@ -6550,6 +6539,28 @@ document.getElementById('settings-btn').addEventListener('click', openSettings);
 // Apply saved settings on boot
 applySettings(loadSettings());
 </script>
+
+<!-- SAVE / SUBMIT MODAL -->
+<div id="save-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;width:min(420px,90vw);box-shadow:0 20px 60px rgba(0,0,0,.6);">
+    <div style="font-size:16px;font-weight:700;color:var(--text2);margin-bottom:4px;">Save JSON</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:22px;">Download locally or send to the FaithChess team for review.</div>
+
+    <button id="save-modal-local" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:16px;background:rgba(165,148,192,.15);border:1px solid var(--accent);border-radius:var(--radius);color:var(--accent);font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6v7a1 1 0 001 1h10a1 1 0 001-1V6"/><polyline points="5 2 5 7 11 7 11 2"/><polyline points="11 2 14 2 14 6 2 6 2 2 5 2"/></svg>
+      Save locally
+    </button>
+
+    <textarea id="save-modal-note" placeholder="Optional: describe what you added or changed…" style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:9px 12px;font-size:13px;font-family:inherit;resize:vertical;min-height:68px;outline:none;margin-bottom:10px;"></textarea>
+
+    <button id="save-modal-submit" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:14px;background:rgba(88,101,242,.12);border:1px solid rgba(88,101,242,.45);border-radius:var(--radius);color:#8b9cf4;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 3a1 1 0 00-1-1H4a1 1 0 00-1 1v7a1 1 0 001 1h7l3 3V3z"/></svg>
+      Submit for review
+    </button>
+
+    <button id="save-modal-cancel" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;">Cancel</button>
+  </div>
+</div>
 </body>
 </html>
 
