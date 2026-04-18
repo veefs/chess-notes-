@@ -12,12 +12,25 @@
 </head>
 <body>
 
+    <div id="puzzle-popup" class="hidden">
+  <div class="popup-box">
+    <h3>❌ Wrong Move</h3>
+    <p>That move doesn’t solve the puzzle.</p>
+
+    <div class="popup-actions">
+  <button id="retryBtn">Retry</button>
+  <button id="exitBtn">Exit</button>
+  <button id="solutionBtn">Show Solution</button>
+</div>
+  </div>
+</div>
+
 <header>
   <div class="logo">♟ FaithChess</div>
   <div class="nav">
-    <div class="nav-item active" onclick="window.location.href='index.html';">Home</div>
+    <div class="nav-item" onclick="window.location.href='index.html';">Home</div>
     <div class="nav-item" onclick="window.location.href='play.html';">Play</div>
-    <div class="nav-item" onclick="window.location.href='puzzles.html';">Puzzles</div>
+    <div class="nav-item active" onclick="window.location.href='puzzles.html';">Puzzles</div>
     <div class="nav-item" onclick="window.location.href='watch.html';">Watch</div>
     <div class="nav-item" onclick="window.location.href='theory.html';">Theory</div>
   </div>
@@ -26,21 +39,33 @@
 <main>
 
 <section class="hero">
-  <h1>Master Chess with Precision</h1>
-  <p>Openings. Tactics. Endgames. Built like a weapon.</p>
+  <h1>Practice With Puzzles</h1>
+  <p>Patterns. Strategies. Tactics. Sharpen your skills.</p>
 </section>
 
-<section class="section" style="margin-right: 0;">
-  <div class="board-wrap">
+<section class="section">
+  <div class="puzzle-layout">
 
-    <div class="player-bar top" id="black-bar">
-      ⚫ Black
+    <div class="board-wrapper">
+      <div id="board"></div>
     </div>
 
-    <div id="board"></div>
+    <div id="puzzle-panel">
+      <div class="panel-box">
 
-    <div class="player-bar bottom" id="white-bar">
-      ⚪ White
+        <div class="panel-title">♟ Puzzle Info</div>
+
+        <div class="panel-row">
+          <span>Side to move</span>
+          <b id="sideToMove">-</b>
+        </div>
+
+        <div class="panel-row">
+          <span>Streak</span>
+          <b id="streakCount">0</b>
+        </div>
+
+      </div>
     </div>
 
   </div>
@@ -60,7 +85,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
 
 <!-- THEN your script -->
-<script src="live.js"></script>
+<script src="puzzles.js"></script>
 
 </body>
 </html>
