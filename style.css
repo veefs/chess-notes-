@@ -752,3 +752,25 @@ body.light-mode .auth-box {
   pointer-events: none;
   z-index: 5;
 }
+
+/* INBOX BADGE */
+.inbox-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #e05c5c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.settings-wrap {
+  position: relative;
+}

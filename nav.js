@@ -1,5 +1,3 @@
-// nav.js — shared nav injected on every page
-
 (function () {
   const currentPage = window.location.pathname.split("/").pop() || "index.html";
 
@@ -24,6 +22,22 @@
     <div class="nav">${navItems}</div>
     <div class="nav-spacer"></div>
     <span id="navUsername" class="nav-username hidden"></span>
+
+    <div class="settings-wrap" style="margin-right:8px;">
+      <button class="cog-btn" id="inboxBtn" aria-label="Inbox">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+  <polyline points="22,6 12,13 2,6"/>
+</svg>
+        <span id="inboxBadge" class="inbox-badge hidden">0</span>
+      </button>
+      <div class="cog-dropdown hidden" id="inboxDropdown">
+        <div class="cog-item" style="color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase;">Challenges</div>
+        <div class="cog-divider"></div>
+        <div id="inboxList"><div class="cog-item" style="color:var(--muted);font-size:13px;">No pending challenges</div></div>
+      </div>
+    </div>
+
     <div class="settings-wrap">
       <button class="cog-btn" id="cogBtn" aria-label="Settings">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -38,23 +52,39 @@
     </div>
   `;
 
-  // Inject into <header>
   const header = document.querySelector("header");
   if (header) header.innerHTML = headerHTML;
 
-    const cogBtn = document.getElementById("cogBtn");
+  // Cog toggle
+  const cogBtn = document.getElementById("cogBtn");
   const cogDropdown = document.getElementById("cogDropdown");
+  const inboxBtn = document.getElementById("inboxBtn");
+  const inboxDropdown = document.getElementById("inboxDropdown");
 
   if (cogBtn && cogDropdown) {
     cogBtn.addEventListener("click", e => {
       e.stopPropagation();
+      inboxDropdown.classList.add("hidden");
       cogDropdown.classList.toggle("hidden");
       cogBtn.classList.toggle("active");
-    });
-
-    document.addEventListener("click", () => {
-      cogDropdown.classList.add("hidden");
-      cogBtn.classList.remove("active");
+      inboxBtn.classList.remove("active");
     });
   }
+
+  if (inboxBtn && inboxDropdown) {
+    inboxBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      cogDropdown.classList.add("hidden");
+      cogBtn.classList.remove("active");
+      inboxDropdown.classList.toggle("hidden");
+      inboxBtn.classList.toggle("active");
+    });
+  }
+
+  document.addEventListener("click", () => {
+    cogDropdown.classList.add("hidden");
+    cogBtn.classList.remove("active");
+    inboxDropdown.classList.add("hidden");
+    inboxBtn.classList.remove("active");
+  });
 })();

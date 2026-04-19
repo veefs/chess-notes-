@@ -15,142 +15,123 @@ const firebaseConfig = {
   appId: "1:132292001988:web:3c9b7227f1b09766b48991"
 };
 
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-const db  = getDatabase(app);
+const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const db   = getDatabase(app);
 const auth = getAuth(app);
 
-// ─── State ─────────────────────────────────────────────────
-let myUid = null;
+let myUid      = null;
 let myUsername = null;
 
-// ─── Toast container ───────────────────────────────────────
-const toastContainer = document.createElement("div");
-toastContainer.id = "challenge-toast";
-document.body.appendChild(toastContainer);
-
-// ─── Simple toast ──────────────────────────────────────────
+// ── Toast ───────────────────────────────────────────────────
 function showToast(msg) {
   const el = document.createElement("div");
-  el.style = `
+  el.style.cssText = `
     position:fixed;bottom:20px;right:20px;
-    background:#222;color:#fff;padding:10px 14px;
-    border-radius:8px;z-index:9999;font-size:13px;
+    background:var(--bg2,#222);color:var(--text2,#fff);
+    padding:10px 14px;border-radius:8px;z-index:9999;
+    font-size:13px;border:1px solid var(--border,#333);
+    font-family:'Outfit',sans-serif;
   `;
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2500);
 }
 
-// ─── Challenge Toast (Accept/Decline) ──────────────────────
-function showChallengeToast(fromUid, fromUsername) {
-  const card = document.createElement("div");
-  card.style = `
-    position:fixed;bottom:20px;right:20px;
-    background:#1e1e1e;color:#fff;padding:16px;
-    border-radius:10px;z-index:9999;width:260px;
-    box-shadow:0 8px 24px rgba(0,0,0,.6);
-    font-family:sans-serif;
-  `;
+// ── Update inbox UI ─────────────────────────────────────────
+function updateInbox(challenges) {
+  const listEl  = document.getElementById("inboxList");
+  const badge   = document.getElementById("inboxBadge");
+  if (!listEl || !badge) return;
 
-  card.innerHTML = `
-    <div style="font-weight:700;margin-bottom:8px;">
-      ⚔ Challenge from ${fromUsername}
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button id="acceptBtn" style="flex:1;">Accept</button>
-      <button id="declineBtn" style="flex:1;">Decline</button>
-    </div>
-  `;
+  const entries = Object.entries(challenges);
 
-  document.body.appendChild(card);
+  if (entries.length === 0) {
+    badge.classList.add("hidden");
+    listEl.innerHTML = `<div class="cog-item" style="color:var(--muted);font-size:13px;">No pending challenges</div>`;
+    return;
+  }
 
-  card.querySelector("#acceptBtn").onclick = () => {
-    card.remove();
-    acceptChallenge(fromUid);
-  };
+  badge.textContent = entries.length;
+  badge.classList.remove("hidden");
+  listEl.innerHTML = "";
 
-  card.querySelector("#declineBtn").onclick = () => {
-    card.remove();
-    declineChallenge(fromUid);
-  };
-
-  setTimeout(() => card.remove(), 8000);
+  for (const [fromUid, data] of entries) {
+    const item = document.createElement("div");
+    item.style.cssText = "padding:10px 16px;border-bottom:1px solid var(--border);";
+    item.innerHTML = `
+      <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px;">⚔ ${data.fromUsername}</div>
+      <div style="display:flex;gap:6px;">
+        <button data-accept="${fromUid}" style="flex:1;padding:4px 8px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius,6px);font-family:'Outfit',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">Accept</button>
+        <button data-decline="${fromUid}" style="flex:1;padding:4px 8px;background:var(--bg4);color:var(--muted);border:none;border-radius:var(--radius,6px);font-family:'Outfit',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">Decline</button>
+      </div>
+    `;
+    item.querySelector("[data-accept]").onclick = e => {
+      e.stopPropagation();
+      acceptChallenge(fromUid, data);
+    };
+    item.querySelector("[data-decline]").onclick = e => {
+      e.stopPropagation();
+      declineChallenge(fromUid);
+    };
+    listEl.appendChild(item);
+  }
 }
 
-// ─── Send Challenge (USED BY PROFILE PAGE) ─────────────────
+// ── Send Challenge ──────────────────────────────────────────
 window.sendChallenge = async function(toUid, toUsername) {
   if (!myUid) return;
 
   const already = await get(ref(db, `challenges/${toUid}/${myUid}`));
-  if (already.exists()) {
-    showToast("Already challenged");
-    return;
-  }
+  if (already.exists()) { showToast("Already challenged"); return; }
 
   await set(ref(db, `challenges/${toUid}/${myUid}`), {
-    fromUid: myUid,
+    fromUid:      myUid,
     fromUsername: myUsername,
     toUid,
     toUsername,
-    sentAt: Date.now()
+    sentAt:       Date.now(),
   });
 
-  showToast(`Challenge sent to ${toUsername}`);
+  showToast(`Challenge sent to ${toUsername}!`);
 };
 
-// ─── Accept Challenge ──────────────────────────────────────
-async function acceptChallenge(fromUid) {
-  const snap = await get(ref(db, `challenges/${myUid}/${fromUid}`));
-  const data = snap.val();
-  if (!data) return;
-
+// ── Accept Challenge ────────────────────────────────────────
+async function acceptChallenge(fromUid, data) {
   const gameId = crypto.randomUUID();
 
   await set(ref(db, `games/${gameId}`), {
-    white: { uid: fromUid, username: data.fromUsername },
-    black: { uid: myUid, username: myUsername },
-    moves: [],
-    status: "playing",
-    createdAt: Date.now()
+    white:     { uid: fromUid, username: data.fromUsername },
+    black:     { uid: myUid,   username: myUsername },
+    moves:     [],
+    status:    "playing",
+    createdAt: Date.now(),
   });
 
   await set(ref(db, `users/${fromUid}/currentGame`), gameId);
-  await set(ref(db, `users/${myUid}/currentGame`), gameId);
-
+  await set(ref(db, `users/${myUid}/currentGame`),   gameId);
   await remove(ref(db, `challenges/${myUid}/${fromUid}`));
 
   window.location.href = `play.html?challenge=${gameId}&color=black`;
 }
 
-// ─── Decline Challenge ─────────────────────────────────────
+// ── Decline Challenge ───────────────────────────────────────
 async function declineChallenge(fromUid) {
   await remove(ref(db, `challenges/${myUid}/${fromUid}`));
+  showToast("Challenge declined");
 }
 
-// ─── Listen for Challenges ─────────────────────────────────
-const seen = new Set();
-
-function listen(uid) {
+// ── Listen for incoming challenges ──────────────────────────
+function listenForChallenges(uid) {
   onValue(ref(db, `challenges/${uid}`), snap => {
-    const data = snap.val() || {};
-
-    for (const [fromUid, challenge] of Object.entries(data)) {
-      if (!seen.has(fromUid)) {
-        seen.add(fromUid);
-        showChallengeToast(fromUid, challenge.fromUsername);
-      }
-    }
+    updateInbox(snap.val() || {});
   });
 }
 
-// ─── Init ──────────────────────────────────────────────────
+// ── Init ────────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
   if (!user) return;
-
   myUid = user.uid;
-
   const snap = await get(ref(db, `users/${user.uid}/username`));
   myUsername = snap.val() || user.email;
-
-  listen(myUid);
+  listenForChallenges(myUid);
 });
