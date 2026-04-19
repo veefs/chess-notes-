@@ -3851,7 +3851,6 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
           pieceWrap.innerHTML=PS[piece];
           sqEl.appendChild(pieceWrap);
         }
-        sqEl.onclick = ()=>handleSquareClick(r, f);
         sqEl.addEventListener('pointerdown', ev=>onSquarePointerDown(ev, r, f));
         sqEl.addEventListener('pointerenter', ()=>{
           if(!dragState) return;
@@ -3966,25 +3965,28 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
   }
 
   function onSquarePointerDown(ev, r, f){
+    if(ev.button !== 0) return;
     const game = currentGame();
     if(!game || botThinking || ply !== states.length - 1 || game.turn() !== playerTurn || game.game_over() || pendingPromotion) return;
-    if(ev.button !== 0) return;
     const piece = game.board()[r]?.[f];
-    if(!piece || piece.color !== playerTurn) return;
-    ev.preventDefault();
+    const isOwnPiece = !!(piece && piece.color === playerTurn);
+    // Always record tap origin so globalPointerUp can attempt a move on any square
     clearPendingDrag();
     pendingDragStart = {
       pointerId: ev.pointerId,
       from: { r, f },
-      piece: (piece.color === 'w' ? 'w' : 'b') + piece.type.toUpperCase(),
+      piece: isOwnPiece ? ((piece.color === 'w' ? 'w' : 'b') + piece.type.toUpperCase()) : null,
       startX: ev.clientX,
       startY: ev.clientY
     };
-    dragHoldTimer = setTimeout(()=>{
-      if(!pendingDragStart) return;
-      beginDrag(pendingDragStart.from, pendingDragStart.piece, pendingDragStart.startX, pendingDragStart.startY);
-      clearPendingDrag();
-    }, 180);
+    if(isOwnPiece){
+      ev.preventDefault();
+      dragHoldTimer = setTimeout(()=>{
+        if(!pendingDragStart || !pendingDragStart.piece) return;
+        beginDrag(pendingDragStart.from, pendingDragStart.piece, pendingDragStart.startX, pendingDragStart.startY);
+        clearPendingDrag();
+      }, 180);
+    }
   }
 
   function globalPointerMove(ev){
@@ -4038,8 +4040,11 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
       const from = pendingDragStart.from;
       clearPendingDrag();
       const game = currentGame();
-      const piece = game?.board()?.[from.r]?.[from.f];
-      if(piece && piece.color === playerTurn){
+      if(!game || botThinking || ply !== states.length - 1 || game.turn() !== playerTurn || game.game_over() || pendingPromotion) return;
+      const piece = game.board()[from.r]?.[from.f];
+      const isOwnPiece = !!(piece && piece.color === playerTurn);
+      if(isOwnPiece){
+        // Tap on own piece: select or deselect
         if(selected && selected.r === from.r && selected.f === from.f){
           selected = null;
           hoverTarget = null;
@@ -4048,6 +4053,13 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
           hoverTarget = null;
         }
         drawBoard();
+      } else if(selected){
+        // Tap on empty/opponent while piece selected: attempt move
+        if(!tryPlayerMove(selected, from)){
+          selected = null;
+          hoverTarget = null;
+          drawBoard();
+        }
       }
     }
   }
