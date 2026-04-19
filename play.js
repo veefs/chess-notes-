@@ -1,17 +1,140 @@
-const boardEl = document.getElementById("board");
+console.log("♟ FaithChess Play loaded");
 
-if (!boardEl) {
-  alert("❌ Missing #board element");
-  throw new Error("No board element found");
-}
+// =======================
+// BOARD + GAME
+// =======================
+const boardEl = document.getElementById("board");
+if (!boardEl) throw new Error("No #board element found");
 
 const game = new Chess();
-
-const board = Chessboard("board", {
+let board = Chessboard("board", {
   position: "start",
   draggable: false,
   pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+  onDrop,
+  onDragStart,
 });
+
+let myColor = null;
+let currentGameId = null;
+
+// =======================
+// DRAG GUARDS
+// =======================
+function onDragStart(source, piece) {
+  if (!myColor) return false;
+  if (game.game_over()) return false;
+  if (myColor === "white" && piece.startsWith("b")) return false;
+  if (myColor === "black" && piece.startsWith("w")) return false;
+  if (myColor === "white" && game.turn() !== "w") return false;
+  if (myColor === "black" && game.turn() !== "b") return false;
+  return true;
+}
+
+function onDrop(source, target) {
+  const move = game.move({ from: source, to: target, promotion: "q" });
+  if (!move) return "snapback";
+  board.position(game.fen(), false); // ← false = no animation for your own move
+  playSound(soundForMove(move, game));
+  pushMove();
+}
+
+// =======================
+// PUSH MOVE TO FIREBASE
+// =======================
+function pushMove() {
+  if (!currentGameId) return;
+  import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
+    .then(({ ref, set }) => {
+      const db = window.firebaseDb;
+      set(ref(db, `games/${currentGameId}/moves`), game.history());
+      set(ref(db, `games/${currentGameId}/fen`), game.fen());
+    });
+}
+
+// =======================
+// LISTEN TO GAME
+// =======================
+function listenToGame(gameId) {
+  import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
+    .then(({ ref, onValue }) => {
+      const db = window.firebaseDb;
+
+      onValue(ref(db, `games/${gameId}`), (snap) => {
+        const data = snap.val();
+        if (!data) return;
+
+        // Sync moves from remote
+        const remoteMoves = data.moves ? Object.values(data.moves) : [];
+        const localMoves = game.history();
+
+        if (remoteMoves.length !== localMoves.length) {
+          game.reset();
+          for (const san of remoteMoves) game.move(san);
+          board.position(game.fen(), true); // ← true = animate opponent's move
+          playSound(soundForMove({ captured: game.history({ verbose: true }).at(-1)?.captured }, game));
+        }
+
+        // Update player bars
+        updatePlayerBars(data);
+
+        if (game.game_over()) {
+          console.log("🏁 Game over:", getGameOverMessage());
+        }
+      });
+    });
+}
+
+// =======================
+// START GAME (called after match found)
+// =======================
+function startGame(gameId, color) {
+  currentGameId = gameId;
+  myColor = color;
+
+  board.destroy();
+  board = Chessboard("board", {
+    position: "start",
+    draggable: true,
+    orientation: color,
+    pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+    onDrop,
+    onDragStart,
+  });
+
+  console.log(`🎮 Game started | ID: ${gameId} | Playing as: ${color}`);
+  listenToGame(gameId);
+}
+
+// =======================
+// PLAYER BARS
+// =======================
+function updatePlayerBars(data) {
+  const topBar = document.getElementById("black-bar");
+  const bottomBar = document.getElementById("white-bar");
+  if (!topBar || !bottomBar) return;
+
+  const whiteUsername = data.white?.username || "White";
+  const blackUsername = data.black?.username || "Black";
+
+  if (myColor === "white") {
+    bottomBar.textContent = `⚪ ${whiteUsername} (You)`;
+    topBar.textContent = `⚫ ${blackUsername}`;
+  } else {
+    bottomBar.textContent = `⚫ ${blackUsername} (You)`;
+    topBar.textContent = `⚪ ${whiteUsername}`;
+  }
+}
+
+// =======================
+// GAME OVER
+// =======================
+function getGameOverMessage() {
+  if (game.in_checkmate()) return `Checkmate! ${game.turn() === "w" ? "Black" : "White"} wins!`;
+  if (game.in_stalemate()) return "Stalemate!";
+  if (game.in_draw()) return "Draw!";
+  return "Game over!";
+}
 
 // =======================
 // WAIT FOR FIREBASE
@@ -25,81 +148,54 @@ function waitForFirebase(cb) {
 // QUEUE
 // =======================
 function joinQueue(uid, username) {
-  const db = window.firebaseDb;
-  const ref = window.firebaseRef;
-  const set = window.firebaseSet;
-
-  // Write yourself into the queue
-  const myQueueRef = ref(db, `queue/${uid}`);
-  set(myQueueRef, {
-    uid,
-    username,
-    joinedAt: Date.now(),
-  });
-
-  // Clean up queue entry if tab closes
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-    .then(({ onDisconnect }) => {
+    .then(({ ref, set, remove, onDisconnect }) => {
+      const db = window.firebaseDb;
+
+      remove(ref(db, `users/${uid}/currentGame`));
+
+      const myQueueRef = ref(db, `queue/${uid}`);
+      set(myQueueRef, { uid, username, joinedAt: Date.now() });
       onDisconnect(myQueueRef).remove();
-    });
 
-  // Now try to match
-  tryMatch(uid, username);
-}
-
-function leaveQueue(uid) {
-  const db = window.firebaseDb;
-  const ref = window.firebaseRef;
-  import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-    .then(({ remove }) => {
-      remove(ref(db, `queue/${uid}`));
+      console.log("🔍 In queue, looking for opponent...");
+      tryMatch(uid, username);
     });
 }
 
 function tryMatch(myUid, myUsername) {
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-    .then(({ runTransaction, get, ref, remove, set, onValue }) => {
+    .then(({ ref, runTransaction }) => {
       const db = window.firebaseDb;
       const queueRef = ref(db, "queue");
 
-      // Run a transaction on the whole queue to safely grab an opponent
+      let matchedOpponent = null;
+
       runTransaction(queueRef, (queue) => {
         if (!queue) return queue;
 
         const entries = Object.values(queue).filter(e => e.uid !== myUid);
+        if (entries.length === 0) return queue;
 
-        if (entries.length === 0) {
-          // No one to match with yet — stay in queue
-          return queue;
-        }
-
-        // Grab the oldest person in queue
         entries.sort((a, b) => a.joinedAt - b.joinedAt);
-        const opponent = entries[0];
+        matchedOpponent = entries[0];
 
-        // Remove both from queue inside the transaction
         delete queue[myUid];
-        delete queue[opponent.uid];
+        delete queue[matchedOpponent.uid];
 
         return queue;
       }).then((result) => {
-        if (!result.committed) {
-          console.log("Transaction not committed");
-          return;
+        if (!result.committed) return;
+
+        if (matchedOpponent) {
+          // We are the matcher — start as white directly, don't listenForGame
+          console.log("✅ Matched with:", matchedOpponent.username);
+          createGame(myUid, myUsername, matchedOpponent.uid, matchedOpponent.username);
+        } else {
+          // No one in queue — we are the waiter, listen for assignment
+          console.log("⏳ Waiting for opponent...");
+          listenForGame(myUid);
         }
-
-        const queue = result.snapshot.val() || {};
-        const remaining = Object.values(queue);
-
-        // Check if opponent was removed (meaning we matched)
-        // If our uid is gone from queue, someone matched us — check currentGame
-        // If we did the matching, create the game
-        get(ref(db, `queue/${myUid}`)).then(snap => {
-          if (!snap.exists()) {
-            // We were matched by someone else — listen for our game
-            listenForGame(myUid);
-          }
-        });
       });
     });
 }
@@ -108,8 +204,7 @@ function createGame(whiteUid, whiteUsername, blackUid, blackUsername) {
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
     .then(({ ref, set, push }) => {
       const db = window.firebaseDb;
-      const gamesRef = ref(db, "games");
-      const gameRef = push(gamesRef); // auto-generate game ID
+      const gameRef = push(ref(db, "games"));
       const gameId = gameRef.key;
 
       set(gameRef, {
@@ -121,12 +216,12 @@ function createGame(whiteUid, whiteUsername, blackUid, blackUsername) {
         createdAt: Date.now(),
       });
 
-      // Tell both players which game they're in
+      // Tell both players their game ID
       set(ref(db, `users/${whiteUid}/currentGame`), gameId);
       set(ref(db, `users/${blackUid}/currentGame`), gameId);
 
       console.log("✅ Game created:", gameId);
-      return gameId;
+      startGame(gameId, "white");
     });
 }
 
@@ -134,48 +229,60 @@ function listenForGame(uid) {
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
     .then(({ ref, onValue }) => {
       const db = window.firebaseDb;
-      const gameRef = ref(db, `users/${uid}/currentGame`);
-
       console.log("👂 Listening for game assignment...");
 
-      const unsub = onValue(gameRef, (snap) => {
-        if (snap.exists()) {
+      const unsub = onValue(ref(db, `users/${uid}/currentGame`), (snap) => {
+        if (snap.exists() && !currentGameId) {
           const gameId = snap.val();
-          console.log("🎮 Game found:", gameId);
-          unsub(); // stop listening
-          // TODO: load board with gameId
+          console.log("🎮 Game assigned:", gameId);
+          unsub();
+          startGame(gameId, "black");
         }
       });
     });
 }
 
 // =======================
+// SOUND SYSTEM
+// =======================
+const sounds = {
+  move: new Audio("sounds/move-self.mp3"),
+  capture: new Audio("sounds/capture.mp3"),
+  check: new Audio("sounds/move-check.mp3"),
+};
+
+function playSound(name) {
+  const s = sounds[name];
+  if (!s) return;
+  s.currentTime = 0;
+  s.play().catch(() => { });
+}
+
+function soundForMove(move, chessGame) {
+  if (chessGame.in_check()) return "check";
+  if (move.captured) return "capture";
+  return "move";
+}
+
+// =======================
 // INIT
 // =======================
 waitForFirebase(() => {
-  const auth = window.firebaseAuth;
-
-  window.firebaseOnAuthChanged(auth, user => {
+  window.firebaseOnAuthChanged(window.firebaseAuth, user => {
     if (!user) {
-      console.log("Not logged in — redirect to login");
-      // window.location.href = "login.html"; // uncomment when ready
+      window.location.href = "login.html";
       return;
     }
 
     console.log("✅ Logged in as:", user.uid);
 
-    // Fetch username then join queue
     import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
       .then(({ ref, get }) => {
-        const db = window.firebaseDb;
-        get(ref(db, `users/${user.uid}/username`)).then(snap => {
+        get(ref(window.firebaseDb, `users/${user.uid}/username`)).then(snap => {
           const username = snap.val() || user.email;
-          console.log("👤 Username:", username);
-
-          // Expose for use later
           window.myUid = user.uid;
           window.myUsername = username;
-
+          console.log("👤 Username:", username);
           joinQueue(user.uid, username);
         });
       });

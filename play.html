@@ -94,6 +94,7 @@
   window.firebaseOnValue = onValue;
   window.firebaseAuth = auth;
   window.firebaseSignOut = signOut;
+  window.firebaseOnAuthChanged = onAuthStateChanged;
 
   onAuthStateChanged(auth, async user => {
     const dropdown = document.getElementById("cogDropdown");
