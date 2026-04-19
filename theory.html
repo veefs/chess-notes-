@@ -3475,6 +3475,8 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
   let pendingPromotion = null;
   let cleanupDone = false;
   let practiceElo = 1600;
+  let _cachedGame = null;
+  let _cachedGameFen = null;
   const playerTurn = userColor;
   const engineTurn = userColor === 'w' ? 'b' : 'w';
   const PRACTICE_MIN_ELO = 100;
@@ -3656,7 +3658,17 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
   function currentGame(){
     const state = currentState();
     if(!state?.fen || typeof Chess !== 'function') return null;
-    try { return new Chess(state.fen); } catch(_) { return null; }
+    if(_cachedGame && _cachedGameFen === state.fen) return _cachedGame;
+    try {
+      _cachedGame = new Chess(state.fen);
+      _cachedGameFen = state.fen;
+      return _cachedGame;
+    } catch(_) { return null; }
+  }
+
+  function invalidatePracticeGame(){
+    _cachedGame = null;
+    _cachedGameFen = null;
   }
 
   function rebuildStates(){
@@ -3859,6 +3871,7 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
 
   function goto(nextPly){
     ply = Math.max(0, Math.min(nextPly, states.length - 1));
+    invalidatePracticeGame();
     selected = null;
     ctr.textContent = `${ply} / ${states.length - 1}`;
     ml.querySelectorAll('.mb').forEach(btn => btn.classList.toggle('active', +btn.dataset.ply === ply));
@@ -4060,7 +4073,31 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
   rebuildStates();
   renderMoveList();
   renderPracticeStrength();
-  goto(states.length - 1);
+
+  // Auto-replay seed moves so user sees the position being reached
+  function autoReplay(targetPly, done){
+    if(targetPly <= 0){ goto(0); done && done(); return; }
+    goto(0);
+    let i = 1;
+    function step(){
+      if(i > targetPly){ done && done(); return; }
+      goto(i);
+      i++;
+      setTimeout(step, 120);
+    }
+    setTimeout(step, 80);
+  }
+
+  const seedEnd = states.length - 1;
+  if(seedEnd > 0){
+    autoReplay(seedEnd, ()=>{
+      if(currentGame() && currentGame().turn() === engineTurn) maybeBotMove();
+    });
+  } else {
+    goto(0);
+    if(currentGame() && currentGame().turn() === engineTurn) maybeBotMove();
+  }
+
   return card;
 }
 
