@@ -6,6 +6,7 @@
 <title>FaithChess — Profile</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
 <style>
   .profile-wrap { max-width: 960px; margin: 40px auto; padding: 0 24px; display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
   .profile-card { background: linear-gradient(145deg, var(--bg2), var(--bg3)); border: 1px solid var(--border); border-radius: 12px; padding: 28px 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; position: sticky; top: 24px; overflow: hidden; }
@@ -55,6 +56,24 @@
   .btn-accept { padding: 4px 10px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; }
   .btn-decline { padding: 4px 10px; background: var(--bg4); color: var(--muted); border: none; border-radius: var(--radius); font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; }
   @media (max-width: 700px) { .profile-wrap { grid-template-columns: 1fr; } .profile-card { position: static; } }
+  .game-entry { cursor: pointer; transition: opacity .15s; }
+  .game-entry:hover { opacity: .8; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .modal-overlay.hidden { display: none; }
+  .modal-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 24px; width: 420px; max-width: 95vw; display: flex; flex-direction: column; gap: 16px; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; }
+  .modal-title { font-size: 14px; font-weight: 700; color: var(--text2); }
+  .modal-close { background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; padding: 0; }
+  .modal-close:hover { color: var(--text2); }
+  .modal-controls { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .ctrl-btn { background: var(--bg4); border: 1px solid var(--border); color: var(--text2); border-radius: 6px; padding: 6px 14px; font-size: 14px; cursor: pointer; font-family: 'Outfit', sans-serif; }
+  .ctrl-btn:hover { background: var(--bg3); }
+  .move-counter { font-size: 13px; color: var(--muted); min-width: 60px; text-align: center; }
+  .move-list { display: flex; flex-wrap: wrap; gap: 4px; max-height: 100px; overflow-y: auto; }
+  .move-pill { padding: 2px 8px; border-radius: 4px; font-size: 12px; background: var(--bg4); color: var(--muted); cursor: pointer; }
+  .move-pill:hover { color: var(--text2); }
+  .move-pill.active { background: var(--accent); color: #fff; }
+  .move-pill.move-num { color: var(--muted); background: none; cursor: default; padding-right: 2px; }
 </style>
 </head>
 <body>
@@ -95,14 +114,34 @@
   </div>
 </main>
 
+<div id="gameViewModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">Game Review</span>
+      <button class="modal-close" id="modalClose">×</button>
+    </div>
+    <div id="viewBoard" style="width:100%"></div>
+    <div class="modal-controls">
+      <button class="ctrl-btn" id="btnFirst">⏮</button>
+      <button class="ctrl-btn" id="btnPrev">◀</button>
+      <span class="move-counter" id="moveCounter">0 / 0</span>
+      <button class="ctrl-btn" id="btnNext">▶</button>
+      <button class="ctrl-btn" id="btnLast">⏭</button>
+    </div>
+    <div class="move-list" id="moveList"></div>
+  </div>
+</div>
+
 <footer>© 2026 FaithChess — Built for everyone</footer>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
 <script src="nav.js"></script>
 <script type="module" src="auth.js"></script>
 
 <script type="module">
-  import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { getDatabase, ref, get, set, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 
@@ -152,7 +191,7 @@
   });
 
   const TITLES = {
-    dev: { label: "&lt;/&gt; Developer", cls: "title-dev" },
+    dev: { label: "Developer", cls: "title-dev" },
     gm:  { label: "GM",        cls: "title-gm"  },
     im:  { label: "IM",        cls: "title-im"  },
     fm:  { label: "FM",        cls: "title-fm"  },
@@ -188,17 +227,65 @@
 
   async function loadGameHistory(uid) {
     const listEl = document.getElementById("gameList");
-    const snap = await get(ref(db, `users/${uid}/gameHistory`));
-    const history = snap.val();
-    if (!history) {
+
+    // Try saved game history first
+    const historySnap = await get(ref(db, `users/${uid}/gameHistory`));
+    const savedHistory = historySnap.val();
+    if (savedHistory) {
+      renderGameList(Object.values(savedHistory).reverse());
+      return;
+    }
+
+    // Fall back: query games/ node for this user
+    const [asWhiteSnap, asBlackSnap] = await Promise.all([
+      get(query(ref(db, "games"), orderByChild("white/uid"), equalTo(uid))),
+      get(query(ref(db, "games"), orderByChild("black/uid"), equalTo(uid))),
+    ]);
+
+    const games = [];
+    asWhiteSnap.forEach(s => { const d = s.val(); if (d) games.push({ ...d, _myColor: "white", _gameId: s.key }); });
+    asBlackSnap.forEach(s => { const d = s.val(); if (d) games.push({ ...d, _myColor: "black", _gameId: s.key }); });
+
+    if (games.length === 0) {
       listEl.innerHTML = `<div class="empty-state">No games yet. <a href="play.html" style="color:var(--accent)">Play now →</a></div>`;
       return;
     }
-    const games = Object.values(history).reverse();
+
+    games.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    const mapped = games.map(g => {
+      const myColor = g._myColor;
+      const opponent = myColor === "white" ? g.black : g.white;
+      const moves = g.moves ? Object.values(g.moves) : [];
+      const chess = new Chess();
+      for (const m of moves) chess.move(m);
+      let result = "draw";
+      if (chess.in_checkmate()) {
+        const loserColor = chess.turn() === "w" ? "white" : "black";
+        result = myColor === loserColor ? "loss" : "win";
+      } else if (!chess.game_over()) {
+        result = "draw";
+      }
+      return {
+        result,
+        opponentUsername: opponent?.username || "Unknown",
+        myColor,
+        moveCount: moves.length,
+        playedAt: g.createdAt || null,
+        ratingChange: null,
+        gameId: g._gameId || null,
+      };
+    });
+
+    renderGameList(mapped);
+  }
+
+  function renderGameList(games) {
+    const listEl = document.getElementById("gameList");
     listEl.innerHTML = "";
     for (const g of games) {
       const result = g.result;
-      const ratingChange = g.ratingChange ?? 0;
+      const ratingChange = g.ratingChange;
       const entry = document.createElement("div");
       entry.className = `game-entry ${result}`;
       entry.innerHTML = `
@@ -208,11 +295,92 @@
           <div class="game-meta">${g.myColor === "white" ? "White" : "Black"} · ${g.playedAt ? new Date(g.playedAt).toLocaleDateString() : ""}</div>
         </div>
         <div class="game-moves">${g.moveCount ?? "?"} moves</div>
-        <div class="game-rating-change">${ratingChange >= 0 ? "+" : ""}${ratingChange}</div>
+        <div class="game-rating-change">${ratingChange != null ? (ratingChange >= 0 ? "+" : "") + ratingChange : "—"}</div>
       `;
+      if (g.gameId) {
+        entry.onclick = () => openGameViewer(g.gameId, g.myColor, g.opponentUsername);
+      }
       listEl.appendChild(entry);
     }
   }
+
+  // =======================
+  // GAME VIEWER
+  // =======================
+  let viewerBoard = null;
+  let viewerMoves = [];
+  let viewerIndex = 0;
+
+  async function openGameViewer(gameId, myColor, opponent) {
+    const snap = await get(ref(db, `games/${gameId}/moves`));
+    const movesRaw = snap.val();
+    viewerMoves = movesRaw ? Object.values(movesRaw) : [];
+    viewerIndex = viewerMoves.length;
+
+    document.getElementById("modalTitle").textContent = `vs ${opponent} · ${myColor === "white" ? "White" : "Black"}`;
+    document.getElementById("gameViewModal").classList.remove("hidden");
+
+    if (viewerBoard) { viewerBoard.destroy(); viewerBoard = null; }
+    viewerBoard = Chessboard("viewBoard", {
+      position: "start",
+      pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+      orientation: myColor || "white",
+    });
+
+    buildMoveList();
+    goToMove(viewerMoves.length);
+  }
+
+  function goToMove(idx) {
+    viewerIndex = Math.max(0, Math.min(idx, viewerMoves.length));
+    const g = new Chess();
+    for (let i = 0; i < viewerIndex; i++) g.move(viewerMoves[i]);
+    viewerBoard.position(g.fen(), false);
+    document.getElementById("moveCounter").textContent = `${viewerIndex} / ${viewerMoves.length}`;
+    document.querySelectorAll(".move-pill[data-idx]").forEach(el => {
+      el.classList.toggle("active", parseInt(el.dataset.idx) === viewerIndex);
+    });
+  }
+
+  function buildMoveList() {
+    const el = document.getElementById("moveList");
+    el.innerHTML = "";
+    for (let i = 0; i < viewerMoves.length; i++) {
+      if (i % 2 === 0) {
+        const num = document.createElement("span");
+        num.className = "move-pill move-num";
+        num.textContent = `${Math.floor(i / 2) + 1}.`;
+        el.appendChild(num);
+      }
+      const pill = document.createElement("span");
+      pill.className = "move-pill";
+      pill.dataset.idx = i + 1;
+      pill.textContent = viewerMoves[i];
+      pill.onclick = () => goToMove(i + 1);
+      el.appendChild(pill);
+    }
+  }
+
+  document.getElementById("btnFirst").onclick = () => goToMove(0);
+  document.getElementById("btnPrev").onclick  = () => goToMove(viewerIndex - 1);
+  document.getElementById("btnNext").onclick  = () => goToMove(viewerIndex + 1);
+  document.getElementById("btnLast").onclick  = () => goToMove(viewerMoves.length);
+  document.getElementById("modalClose").onclick = () => {
+    document.getElementById("gameViewModal").classList.add("hidden");
+    if (viewerBoard) { viewerBoard.destroy(); viewerBoard = null; }
+  };
+  document.getElementById("gameViewModal").onclick = (e) => {
+    if (e.target === e.currentTarget) {
+      document.getElementById("gameViewModal").classList.add("hidden");
+      if (viewerBoard) { viewerBoard.destroy(); viewerBoard = null; }
+    }
+  };
+  document.addEventListener("keydown", (e) => {
+    if (document.getElementById("gameViewModal").classList.contains("hidden")) return;
+    if (e.key === "ArrowLeft")  goToMove(viewerIndex - 1);
+    if (e.key === "ArrowRight") goToMove(viewerIndex + 1);
+    if (e.key === "Escape") document.getElementById("modalClose").click();
+  });
 
   async function loadFriends(uid, friends) {
     const listEl = document.getElementById("friendsList");

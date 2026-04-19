@@ -21,6 +21,7 @@ let board = Chessboard("board", {
 
 let myColor = null;
 let currentGameId = null;
+let gameOverHandled = false;
 
 // =======================
 // DRAG GUARDS
@@ -100,8 +101,9 @@ function listenToGame(gameId) {
         // Update player bars
         updatePlayerBars(data);
 
-        if (game.game_over()) {
-          console.log("🏁 Game over:", getGameOverMessage());
+        if (game.game_over() && !gameOverHandled) {
+          gameOverHandled = true;
+          saveGameResult(data);
         }
       });
     });
@@ -132,7 +134,7 @@ function startGame(gameId, color) {
 // PLAYER BARS
 // =======================
 const TITLE_LABELS = {
-  dev: { label: "</> Developer", color: "#74ebcb" },
+  dev: { label: "DEV", color: "#74ebcb" },
   gm:  { label: "GM",           color: "#f0c040" },
   im:  { label: "IM",           color: "#aaaaaa" },
   fm:  { label: "FM",           color: "#d4956a" },
@@ -153,7 +155,7 @@ async function fetchTitle(uid) {
 function titleTag(key) {
   const t = key && TITLE_LABELS[key];
   if (!t) return "";
-  return ` <span style="font-size:11px;font-weight:700;color:${t.color};letter-spacing:.5px;">${t.label}</span>`;
+  return `&nbsp;<span style="font-size:11px;font-weight:700;color:${t.color};letter-spacing:.5px;">${t.label}</span>`;
 }
 
 async function updatePlayerBars(data) {
@@ -188,6 +190,50 @@ function getGameOverMessage() {
   if (game.in_stalemate()) return "Stalemate!";
   if (game.in_draw()) return "Draw!";
   return "Game over!";
+}
+
+async function saveGameResult(data) {
+  const { ref, set, get, push } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const db = window.firebaseDb;
+  const myUid = window.myUid;
+  if (!myUid) return;
+
+  let result;
+  if (game.in_checkmate()) {
+    const loserColor = game.turn() === "w" ? "white" : "black";
+    result = myColor === loserColor ? "loss" : "win";
+  } else {
+    result = "draw";
+  }
+
+  const opponentData = myColor === "white" ? data.black : data.white;
+  const opponentUsername = opponentData?.username || "Unknown";
+  const ratingChange = result === "win" ? 10 : result === "loss" ? -10 : 0;
+  const statsField = result === "win" ? "wins" : result === "loss" ? "losses" : "draws";
+
+  const [statSnap, ratingSnap] = await Promise.all([
+    get(ref(db, `users/${myUid}/${statsField}`)),
+    get(ref(db, `users/${myUid}/rating`)),
+  ]);
+
+  const newStat = (statSnap.val() ?? 0) + 1;
+  const newRating = Math.max(100, (ratingSnap.val() ?? 800) + ratingChange);
+
+  const historyKey = push(ref(db, `users/${myUid}/gameHistory`)).key;
+
+  await Promise.all([
+    set(ref(db, `users/${myUid}/${statsField}`), newStat),
+    set(ref(db, `users/${myUid}/rating`), newRating),
+    set(ref(db, `users/${myUid}/gameHistory/${historyKey}`), {
+      result,
+      opponentUsername,
+      myColor,
+      moveCount: game.history().length,
+      playedAt: Date.now(),
+      ratingChange,
+    }),
+    set(ref(db, `games/${currentGameId}/status`), "finished"),
+  ]);
 }
 
 // =======================
