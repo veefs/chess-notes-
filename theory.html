@@ -3818,53 +3818,94 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
     drawBoard();
   }
 
-  function drawBoard(){
-    const state = currentState();
-    const game = currentGame();
-    const legalTargets = new Map();
-    if(selected && game && ply === states.length - 1 && game.turn() === playerTurn){
-      (game.moves({ square: coordsToSq(selected.r, selected.f), verbose: true }) || []).forEach(mv=>{
-        const target = sqToCoords(mv.to);
-        legalTargets.set(target.r + ',' + target.f, { capture: !!mv.captured });
-      });
-    }
+  // Build fixed squares once, update in-place on each drawBoard call
+  let _sqEls = null;
+  let _lastFlipped = null;
 
+  function buildGrid(){
     grid.innerHTML = '';
+    _sqEls = [];
     for(let rr=0; rr<8; rr++){
       for(let ff=0; ff<8; ff++){
-        const { r, f } = flipped ? { r:7-rr, f:7-ff } : { r:rr, f:ff };
-        const sqEl=document.createElement('div');
-        sqEl.className='sq '+(((rr+ff)&1)?'dark':'light');
-        sqEl.dataset.r = String(r);
-        sqEl.dataset.f = String(f);
-        if(state.checkSquare && state.checkSquare.r === r && state.checkSquare.f === f) sqEl.classList.add('king-in-check');
-        if(selected && selected.r === r && selected.f === f) sqEl.classList.add('hl-from');
-        if(state.to && state.to.r === r && state.to.f === f) sqEl.classList.add('hl-to');
-        if(hoverTarget && hoverTarget.r === r && hoverTarget.f === f) sqEl.classList.add('drag-target');
-        const legal = legalTargets.get(r + ',' + f);
-        if(legal && !(selected && selected.r === r && selected.f === f)) renderLegalMarkerLocal(sqEl, legal.capture);
-        const piece = state.board[r]?.[f];
-        if(piece && PS[piece]){
-          const pieceWrap=document.createElement('div');
-          pieceWrap.className='piece';
-          if(dragState && dragState.from && dragState.from.r === r && dragState.from.f === f) pieceWrap.classList.add('drag-hidden');
-          pieceWrap.innerHTML=PS[piece];
-          sqEl.appendChild(pieceWrap);
-        }
-        sqEl.addEventListener('pointerdown', ev=>onSquarePointerDown(ev, r, f));
-        sqEl.addEventListener('pointerenter', ()=>{
+        const sqEl = document.createElement('div');
+        sqEl.className = 'sq ' + (((rr+ff)&1) ? 'dark' : 'light');
+        sqEl.addEventListener('pointerdown', ev => {
+          const r = +sqEl.dataset.r, f = +sqEl.dataset.f;
+          onSquarePointerDown(ev, r, f);
+        });
+        sqEl.addEventListener('pointerenter', () => {
           if(!dragState) return;
-          const nextHover = legalTargets.has(r + ',' + f) ? { r, f } : null;
+          const r = +sqEl.dataset.r, f = +sqEl.dataset.f;
+          const key = r + ',' + f;
+          const nextHover = _curLegalTargets && _curLegalTargets.has(key) ? { r, f } : null;
           hoverTarget = nextHover;
           applyHoverHighlight(hoverTarget);
         });
         grid.appendChild(sqEl);
+        _sqEls.push(sqEl);
       }
     }
+  }
+
+  let _curLegalTargets = null;
+
+  function drawBoard(){
+    const state = currentState();
+    const game = currentGame();
+
+    // Rebuild grid if flip orientation changed
+    if(_sqEls === null || _lastFlipped !== flipped){
+      buildGrid();
+      _lastFlipped = flipped;
+    }
+
+    // Compute legal targets once
+    _curLegalTargets = new Map();
+    if(selected && game && ply === states.length - 1 && game.turn() === playerTurn){
+      (game.moves({ square: coordsToSq(selected.r, selected.f), verbose: true }) || []).forEach(mv=>{
+        const target = sqToCoords(mv.to);
+        _curLegalTargets.set(target.r + ',' + target.f, { capture: !!mv.captured });
+      });
+    }
+
+    // Update each square in-place
+    for(let rr=0; rr<8; rr++){
+      for(let ff=0; ff<8; ff++){
+        const { r, f } = flipped ? { r:7-rr, f:7-ff } : { r:rr, f:ff };
+        const sqEl = _sqEls[rr*8+ff];
+        sqEl.dataset.r = String(r);
+        sqEl.dataset.f = String(f);
+
+        // Reset classes (keep base color)
+        const base = 'sq ' + (((rr+ff)&1) ? 'dark' : 'light');
+        let cls = base;
+        if(state.checkSquare && state.checkSquare.r===r && state.checkSquare.f===f) cls += ' king-in-check';
+        if(selected && selected.r===r && selected.f===f) cls += ' hl-from';
+        if(state.to && state.to.r===r && state.to.f===f) cls += ' hl-to';
+        if(hoverTarget && hoverTarget.r===r && hoverTarget.f===f) cls += ' drag-target';
+        sqEl.className = cls;
+
+        // Piece
+        const piece = state.board[r]?.[f];
+        const wantHidden = !!(dragState && dragState.from && dragState.from.r===r && dragState.from.f===f);
+        const pieceHtml = (piece && PS[piece]) ? PS[piece] : '';
+
+        // Legal marker dot/ring (not on selected square)
+        const legal = _curLegalTargets.get(r + ',' + f);
+        const showDot = !!(legal && !(selected && selected.r===r && selected.f===f));
+
+        // Only update innerHTML when content actually changes
+        const wantPieceHtml = pieceHtml ? `<div class="piece${wantHidden?' drag-hidden':''}">${pieceHtml}</div>` : '';
+        const wantDot = showDot ? `<div class="${legal.capture?'capture-ring':'move-dot'}"></div>` : '';
+        const want = wantPieceHtml + wantDot;
+        if(sqEl.innerHTML !== want) sqEl.innerHTML = want;
+      }
+    }
+
     applyHoverHighlight(hoverTarget);
-    const from = state.from ? (flipped ? { r: 7 - state.from.r, f: 7 - state.from.f } : state.from) : null;
-    const to = state.to ? (flipped ? { r: 7 - state.to.r, f: 7 - state.to.f } : state.to) : null;
-    drawArr(ac, from ? from.r : -1, from ? from.f : -1, to ? to.r : -1, to ? to.f : -1);
+    const from = state.from ? (flipped ? { r:7-state.from.r, f:7-state.from.f } : state.from) : null;
+    const to   = state.to   ? (flipped ? { r:7-state.to.r,   f:7-state.to.f   } : state.to)   : null;
+    drawArr(ac, from?from.r:-1, from?from.f:-1, to?to.r:-1, to?to.f:-1);
     renderPromotionOverlay();
   }
 
