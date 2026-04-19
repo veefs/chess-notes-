@@ -22,25 +22,6 @@ let board = Chessboard("board", {
 let myColor = null;
 let currentGameId = null;
 
-function onMouseoverSquare(square, piece) {
-  const settings = window.getSettings ? window.getSettings() : {};
-  if (!settings.legalMoves) return;
-  if (inputLocked || !puzzle) return;
-
-  const moves = game.moves({ square, verbose: true });
-  if (!moves.length) return;
-}
-
-function onMouseoutSquare(square, piece) {
-  const settings = window.getSettings ? window.getSettings() : {};
-  if (!settings.legalMoves) return;
-
-  // Only clear blue highlights, leave green/red from move feedback
-  document.querySelectorAll(".highlight-blue").forEach(el => {
-    el.classList.remove("highlight-blue");
-  });
-}
-
 // =======================
 // DRAG GUARDS
 // =======================
