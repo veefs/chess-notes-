@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FaithChess Home</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">♟ FaithChess</div>
+        <div class="nav">
+            <div class="nav-item" onclick="window.location.href='index.html';">Home</div>
+            <div class="nav-item active" onclick="window.location.href='play.html';">Play</div>
+            <div class="nav-item" onclick="window.location.href='puzzles.html';">Puzzles</div>
+            <div class="nav-item" onclick="window.location.href='watch.html';">Watch</div>
+            <div class="nav-item" onclick="window.location.href='theory.html';">Theory</div>
+        </div>
+    </header>
+
+    <main>
+
+        <section class="hero">
+            <h1>Master Chess with Precision</h1>
+            <p>Openings. Tactics. Endgames. Built like a weapon.</p>
+        </section>
+
+        <section class="section" style="margin-right: 0;">
+            <div class="board-wrap">
+
+                <div class="player-bar top" id="black-bar">
+                    ⚫ Black
+                </div>
+
+                <div id="board"></div>
+
+                <div class="player-bar bottom" id="white-bar">
+                    ⚪ White
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        © 2026 FaithChess — Built for everyone
+    </footer>
+
+    <!-- dependencies FIRST -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+        const auth = getAuth(app);
+
+        // expose globally
+        window.firebaseAuth = auth;
+        window.firebaseCreateUser = createUserWithEmailAndPassword;
+        window.firebaseSignIn = signInWithEmailAndPassword;
+        window.firebaseOnAuthChanged = onAuthStateChanged;
+        window.firebaseSignOut = signOut;
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAUdXVlmN9xhhIzubK0MTtGO3hA9JkHClA",
+            authDomain: "faithchess.firebaseapp.com",
+            databaseURL: "https://faithchess-default-rtdb.firebaseio.com",
+            projectId: "faithchess",
+            storageBucket: "faithchess.firebasestorage.app",
+            messagingSenderId: "132292001988",
+            appId: "1:132292001988:web:3c9b7227f1b09766b48991"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // Make db available globally so your other scripts can use it
+        window.firebaseDb = db;
+        window.firebaseRef = ref;
+        window.firebaseSet = set;
+        window.firebaseOnValue = onValue;
+    </script>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+    <script src="play.js"></script>
+
+</body>
+
+</html>

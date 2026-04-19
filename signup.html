@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FaithChess — Sign Up</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="logo" onclick="window.location.href='index.html'" style="cursor:pointer;">♟ FaithChess</div>
+</header>
+
+<main>
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <h2 class="auth-title">Create account</h2>
+      <p class="auth-sub">Join FaithChess and start playing</p>
+
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="emailInput" placeholder="you@example.com" />
+      </div>
+
+      <div class="auth-field">
+        <label>Password</label>
+        <input type="password" id="passwordInput" placeholder="min. 6 characters" />
+      </div>
+
+      <div id="authError" class="auth-error hidden"></div>
+
+      <button class="auth-btn" id="signupBtn">Create Account</button>
+
+      <p class="auth-switch">Already have an account? <a href="login.html">Log In</a></p>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+  const app = initializeApp({
+    apiKey: "AIzaSyAUdXVlmN9xhhIzubK0MTtGO3hA9JkHClA",
+    authDomain: "faithchess.firebaseapp.com",
+    projectId: "faithchess",
+    appId: "1:132292001988:web:3c9b7227f1b09766b48991"
+  });
+
+  const auth = getAuth(app);
+
+  document.getElementById("signupBtn").onclick = async () => {
+    const email = document.getElementById("emailInput").value.trim();
+    const password = document.getElementById("passwordInput").value;
+    const errEl = document.getElementById("authError");
+
+    errEl.classList.add("hidden");
+
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      window.location.href = "index.html";
+    } catch (err) {
+      errEl.textContent = friendlyError(err.code);
+      errEl.classList.remove("hidden");
+    }
+  };
+
+  function friendlyError(code) {
+    if (code === "auth/email-already-in-use") return "An account with that email already exists.";
+    if (code === "auth/invalid-email") return "Invalid email address.";
+    if (code === "auth/weak-password") return "Password must be at least 6 characters.";
+    return "Something went wrong. Please try again.";
+  }
+</script>
+
+</body>
+</html>
