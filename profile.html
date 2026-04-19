@@ -205,7 +205,7 @@
   const auth = getAuth(app);
 
   const params       = new URLSearchParams(window.location.search);
-  const viewUsername = params.get("user"); // null = own profile
+  const viewUsername = params.get("user");
 
   const TITLES = {
     dev: { label: "</> Developer", cls: "title-dev" },
@@ -236,7 +236,7 @@
       const targetUid = uidSnap.val();
       if (targetUid === user.uid) { window.location.href = "profile.html"; return; }
 
-      const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, titleSnap, myUsernameSnap] =
+      const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, titleSnap] =
         await Promise.all([
           get(ref(db, `users/${targetUid}/username`)),
           get(ref(db, `users/${targetUid}/rating`)),
@@ -244,7 +244,6 @@
           get(ref(db, `users/${targetUid}/losses`)),
           get(ref(db, `users/${targetUid}/draws`)),
           get(ref(db, `users/${targetUid}/title`)),
-          get(ref(db, `users/${user.uid}/username`)),
         ]);
 
       const targetUsername = usernameSnap.val() || viewUsername;
@@ -260,7 +259,6 @@
 
       loadGameHistory(targetUid);
 
-      // Challenge button — delegates to challenges.js via window.sendChallenge
       const btn = document.getElementById("challengeBtn");
       btn.classList.remove("hidden");
       btn.onclick = async () => {
@@ -288,19 +286,17 @@
         ]);
 
       const username = usernameSnap.val();
-      const data = {
+      renderProfile({
         username,
         rating:  ratingSnap.val(),
         wins:    winsSnap.val(),
         losses:  lossesSnap.val(),
         draws:   drawsSnap.val(),
-        friends: friendsSnap.val() || {},
         title:   titleSnap.val() || null,
-      };
+      });
 
-      renderProfile(data);
       loadGameHistory(user.uid);
-      loadFriends(user.uid, data.friends);
+      loadFriends(user.uid, friendsSnap.val() || {});
       setupAddFriend(user.uid, username);
     }
   });
@@ -335,15 +331,19 @@
     document.getElementById("statWinRate").textContent = winRate;
   }
 
-  // ── Game history: saved first, falls back to querying games/ node ───────────
+  // ── Game history ────────────────────────────────────────────────────────────
   async function loadGameHistory(uid) {
     const listEl = document.getElementById("gameList");
 
-    // Try saved gameHistory first (written by play.html on game end)
+    // Try saved gameHistory first
     const historySnap = await get(ref(db, `users/${uid}/gameHistory`));
     const savedHistory = historySnap.val();
     if (savedHistory) {
-      renderGameList(Object.values(savedHistory).reverse());
+      // savedHistory entries must include gameId when written by play.html
+      const entries = Object.entries(savedHistory)
+        .map(([key, val]) => ({ gameId: val.gameId || key, ...val }))
+        .reverse();
+      renderGameList(entries);
       return;
     }
 
@@ -353,23 +353,22 @@
       get(query(ref(db, "games"), orderByChild("black/uid"), equalTo(uid))),
     ]);
 
-    const games = [];
-    asWhiteSnap.forEach(s => { const d = s.val(); if (d) games.push({ ...d, _myColor: "white", _gameId: s.key }); });
-    asBlackSnap.forEach(s => { const d = s.val(); if (d) games.push({ ...d, _myColor: "black", _gameId: s.key }); });
+    const rawGames = [];
+    asWhiteSnap.forEach(s => { const d = s.val(); if (d) rawGames.push({ ...d, _myColor: "white", _gameId: s.key }); });
+    asBlackSnap.forEach(s => { const d = s.val(); if (d) rawGames.push({ ...d, _myColor: "black", _gameId: s.key }); });
 
-    if (games.length === 0) {
+    if (rawGames.length === 0) {
       listEl.innerHTML = `<div class="empty-state">No games yet. <a href="play.html" style="color:var(--accent)">Play now →</a></div>`;
       return;
     }
 
-    games.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    rawGames.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-    const mapped = games.map(g => {
+    const mapped = rawGames.map(g => {
       const myColor  = g._myColor;
       const opponent = myColor === "white" ? g.black : g.white;
       const moves    = g.moves ? Object.values(g.moves) : [];
 
-      // Determine result — check winner/status fields first, fall back to chess.js
       let result = "draw";
       const status = g.status || "";
 
@@ -388,7 +387,6 @@
                    (loserTurn === "b" && myColor === "white") ? "win" : "loss";
         }
       }
-      // status === "playing" stays as "draw" (in progress)
 
       return {
         result,
@@ -405,20 +403,20 @@
   }
 
   // ── Render game list ────────────────────────────────────────────────────────
-  function renderGameList(games) {
+  function renderGameList(entries) {
     const listEl = document.getElementById("gameList");
     listEl.innerHTML = "";
 
-    if (!games.length) {
+    if (!entries.length) {
       listEl.innerHTML = `<div class="empty-state">No games yet. <a href="play.html" style="color:var(--accent)">Play now →</a></div>`;
       return;
     }
 
-    for (const g of games) {
+    for (const g of entries) {
       const entry = document.createElement("div");
-      entry.className = `game-entry ${g.result}`;
+      entry.className = `game-entry ${g.result || "draw"}`;
       entry.innerHTML = `
-        <div class="game-result">${g.result}</div>
+        <div class="game-result">${g.result || "draw"}</div>
         <div>
           <div class="game-opponent">vs ${g.opponentUsername || "Unknown"}</div>
           <div class="game-meta">${g.myColor === "white" ? "White" : "Black"} · ${g.playedAt ? new Date(g.playedAt).toLocaleDateString() : ""}</div>
@@ -428,6 +426,8 @@
       `;
       if (g.gameId) {
         entry.onclick = () => openGameViewer(g.gameId, g.myColor, g.opponentUsername);
+      } else {
+        entry.style.cursor = "default";
       }
       listEl.appendChild(entry);
     }
@@ -461,9 +461,9 @@
 
   function goToMove(idx) {
     viewerIndex = Math.max(0, Math.min(idx, viewerMoves.length));
-    const g = new Chess();
-    for (let i = 0; i < viewerIndex; i++) g.move(viewerMoves[i]);
-    viewerBoard.position(g.fen(), false);
+    const chess = new Chess();
+    for (let i = 0; i < viewerIndex; i++) chess.move(viewerMoves[i]);
+    viewerBoard.position(chess.fen(), false);
     document.getElementById("moveCounter").textContent = `${viewerIndex} / ${viewerMoves.length}`;
     document.querySelectorAll(".move-pill[data-idx]").forEach(el => {
       el.classList.toggle("active", parseInt(el.dataset.idx) === viewerIndex);
