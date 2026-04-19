@@ -86,7 +86,152 @@
 
 <script src="nav.js"></script>
 
-<script type="module" src="auth.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAUdXVlmN9xhhIzubK0MTtGO3hA9JkHClA",
+    authDomain: "faithchess.firebaseapp.com",
+    databaseURL: "https://faithchess-default-rtdb.firebaseio.com",
+    projectId: "faithchess",
+    storageBucket: "faithchess.firebasestorage.app",
+    messagingSenderId: "132292001988",
+    appId: "1:132292001988:web:3c9b7227f1b09766b48991"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const auth = getAuth(app);
+
+  onAuthStateChanged(auth, async user => {
+    if (!user) { window.location.href = "login.html"; return; }
+
+    const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, friendsSnap] = await Promise.all([
+      get(ref(db, `users/${user.uid}/username`)),
+      get(ref(db, `users/${user.uid}/rating`)),
+      get(ref(db, `users/${user.uid}/wins`)),
+      get(ref(db, `users/${user.uid}/losses`)),
+      get(ref(db, `users/${user.uid}/draws`)),
+      get(ref(db, `users/${user.uid}/friends`)),
+    ]);
+
+    const data = {
+      username: usernameSnap.val(),
+      rating: ratingSnap.val(),
+      wins: winsSnap.val(),
+      losses: lossesSnap.val(),
+      draws: drawsSnap.val(),
+      friends: friendsSnap.val() || {},
+    };
+
+    renderProfile(data);
+    loadGameHistory(user.uid);
+    loadFriends(user.uid, data.friends);
+    setupAddFriend(user.uid);
+  });
+
+  function renderProfile(data) {
+    const username = data.username || "Unknown";
+    const rating = data.rating ?? 1200;
+    const wins = data.wins ?? 0;
+    const losses = data.losses ?? 0;
+    const draws = data.draws ?? 0;
+    const total = wins + losses + draws;
+    const winRate = total > 0 ? Math.round((wins / total) * 100) + "%" : "—";
+    document.getElementById("avatarEl").textContent = username[0].toUpperCase();
+    document.getElementById("usernameEl").textContent = username;
+    document.getElementById("ratingEl").textContent = rating;
+    document.getElementById("statGames").textContent = total;
+    document.getElementById("statWins").textContent = wins;
+    document.getElementById("statLosses").textContent = losses;
+    document.getElementById("statDraws").textContent = draws;
+    document.getElementById("statWinRate").textContent = winRate;
+  }
+
+  async function loadGameHistory(uid) {
+    const listEl = document.getElementById("gameList");
+    const snap = await get(ref(db, `users/${uid}/gameHistory`));
+    const history = snap.val();
+    if (!history) {
+      listEl.innerHTML = `<div class="empty-state">No games yet. <a href="play.html" style="color:var(--accent)">Play now →</a></div>`;
+      return;
+    }
+    const games = Object.values(history).reverse();
+    listEl.innerHTML = "";
+    for (const g of games) {
+      const result = g.result;
+      const ratingChange = g.ratingChange ?? 0;
+      const entry = document.createElement("div");
+      entry.className = `game-entry ${result}`;
+      entry.innerHTML = `
+        <div class="game-result">${result}</div>
+        <div>
+          <div class="game-opponent">vs ${g.opponentUsername || "Unknown"}</div>
+          <div class="game-meta">${g.myColor === "white" ? "White" : "Black"} · ${g.playedAt ? new Date(g.playedAt).toLocaleDateString() : ""}</div>
+        </div>
+        <div class="game-moves">${g.moveCount ?? "?"} moves</div>
+        <div class="game-rating-change">${ratingChange >= 0 ? "+" : ""}${ratingChange}</div>
+      `;
+      listEl.appendChild(entry);
+    }
+  }
+
+  async function loadFriends(uid, friends) {
+    const listEl = document.getElementById("friendsList");
+    const uids = Object.keys(friends);
+    if (uids.length === 0) {
+      listEl.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:4px 0;">No friends yet.</div>`;
+      return;
+    }
+    listEl.innerHTML = "";
+    for (const fUid of uids) {
+      const [nameSnap, ratingSnap] = await Promise.all([
+        get(ref(db, `users/${fUid}/username`)),
+        get(ref(db, `users/${fUid}/rating`)),
+      ]);
+      const fname = nameSnap.val() || "Unknown";
+      const fRating = ratingSnap.val() ?? 1200;
+      const item = document.createElement("div");
+      item.className = "friend-item";
+      item.innerHTML = `
+        <div class="friend-avatar">${fname[0].toUpperCase()}</div>
+        <div>
+          <div class="friend-name">${fname}</div>
+          <div class="friend-rating">${fRating}</div>
+        </div>
+      `;
+      listEl.appendChild(item);
+    }
+  }
+
+  function setupAddFriend(myUid) {
+    document.getElementById("addFriendBtn").onclick = async () => {
+      const input = document.getElementById("friendInput");
+      const msgEl = document.getElementById("friendMsg");
+      const targetUsername = input.value.trim();
+      msgEl.textContent = "";
+      if (!targetUsername) return;
+
+      const snap = await get(ref(db, `usernames/${targetUsername.toLowerCase()}`));
+      if (!snap.exists()) { msgEl.textContent = "User not found."; msgEl.style.color = "#e05c5c"; return; }
+
+      const friendUid = snap.val();
+      if (friendUid === myUid) { msgEl.textContent = "That's you!"; msgEl.style.color = "#e05c5c"; return; }
+
+      await set(ref(db, `users/${myUid}/friends/${friendUid}`), true);
+      await set(ref(db, `users/${friendUid}/friends/${myUid}`), true);
+
+      input.value = "";
+      msgEl.textContent = `Added ${targetUsername}!`;
+      msgEl.style.color = "#4caf7d";
+
+      const friendsSnap = await get(ref(db, `users/${myUid}/friends`));
+      loadFriends(myUid, friendsSnap.val() || {});
+    };
+  }
+</script>
 
 </body>
 </html>
