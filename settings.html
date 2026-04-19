@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FaithChess — Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .settings-wrap { max-width: 600px; margin: 40px auto; padding: 0 24px; display: flex; flex-direction: column; gap: 20px; }
+  .settings-panel { background: linear-gradient(145deg, var(--bg2), var(--bg3)); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+  .settings-panel-title { font-size: 13px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+  .settings-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-label { font-size: 14px; color: var(--text2); font-weight: 500; }
+  .settings-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: var(--bg4); border-radius: 24px; cursor: pointer; transition: background .2s; border: 1px solid var(--border); }
+  .toggle-slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: var(--muted); border-radius: 50%; transition: transform .2s, background .2s; }
+  .toggle input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
+  .toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: #fff; }
+  .settings-select { background: var(--bg4); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text2); font-family: 'Outfit', sans-serif; font-size: 13px; padding: 6px 10px; outline: none; cursor: pointer; }
+  .settings-select:focus { border-color: var(--accent); }
+  .save-btn { width: 100%; padding: 12px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity .2s; margin-top: 8px; }
+  .save-btn:hover { opacity: .85; }
+  .save-msg { text-align: center; font-size: 13px; color: #4caf7d; margin-top: 8px; min-height: 20px; }
+</style>
+</head>
+<body>
+
+<header></header>
+
+<main>
+  <div class="settings-wrap">
+    <div class="settings-panel">
+      <div class="settings-panel-title">Appearance</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Dark Mode</div>
+          <div class="settings-desc">Use dark theme across the site</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="darkModeToggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Board Theme</div>
+          <div class="settings-desc">Choose your board color style</div>
+        </div>
+        <select class="settings-select" id="boardTheme">
+          <option value="classic">Classic</option>
+          <option value="green">Green</option>
+          <option value="blue">Blue</option>
+          <option value="purple">Purple</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-panel">
+      <div class="settings-panel-title">Game</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Sound Effects</div>
+          <div class="settings-desc">Play sounds on moves and captures</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="soundToggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Show Legal Moves</div>
+          <div class="settings-desc">Highlight squares you can move to</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="legalMovesToggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Piece Animation</div>
+          <div class="settings-desc">Animate piece movement on the board</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="animationToggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-panel">
+      <div class="settings-panel-title">Account</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Email Notifications</div>
+          <div class="settings-desc">Receive updates and game invites</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="emailNotifToggle" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <button class="save-btn" id="saveBtn">Save Settings</button>
+    <div class="save-msg" id="saveMsg"></div>
+  </div>
+</main>
+
+<footer>© 2026 FaithChess — Built for everyone</footer>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="nav.js"></script>
+<script type="module" src="auth.js"></script>
+<script src="settings.js"></script>
+
+</body>
+</html>

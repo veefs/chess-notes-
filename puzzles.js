@@ -1,4 +1,4 @@
-console.log("🧩 Lichess CSV puzzle system loaded");
+const settings = window.getSettings ? window.getSettings() : {};
 
 // =======================
 // STATE
@@ -25,11 +25,32 @@ const board = Chessboard("board", {
   snapSpeed: 150,
   snapbackSpeed: 200,
   position: "start",
-  pieceTheme:
-    "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+  pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
   onDrop: onDrop,
   onDragStart: onDragStart,
+  onMouseoverSquare: onMouseoverSquare, 
+  onMouseoutSquare: onMouseoutSquare,  
+  onSnapbackEnd: () => clearLegalDots(),
 });
+
+function onMouseoverSquare(square, piece) {
+  const settings = window.getSettings ? window.getSettings() : {};
+  if (!settings.legalMoves) return;
+  if (inputLocked || !puzzle) return;
+
+  const moves = game.moves({ square, verbose: true });
+  if (!moves.length) return;
+}
+
+function onMouseoutSquare(square, piece) {
+  const settings = window.getSettings ? window.getSettings() : {};
+  if (!settings.legalMoves) return;
+
+  // Only clear blue highlights, leave green/red from move feedback
+  document.querySelectorAll(".highlight-blue").forEach(el => {
+    el.classList.remove("highlight-blue");
+  });
+}
 
 // =======================
 // UI
@@ -98,6 +119,9 @@ const sounds = {
 };
 
 function playSound(name) {
+  console.log(settings.sound);
+  if(!settings.sound) return;
+  
   const s = sounds[name];
   if (!s) return;
   s.currentTime = 0;
@@ -255,6 +279,8 @@ function playSolution() {
     if (i >= puzzle.solution.length) {
       solutionPlaying = false;
       popup.classList.remove("hidden");
+      popup.querySelector("#puzzle-title").textContent = "Solution complete!";
+      popup.querySelector("#puzzle-desc").textContent = `You can try the puzzle again or move on to the next one.`;
       return;
     }
 
@@ -292,10 +318,28 @@ function playSolution() {
 // DRAG START — don't clear highlights on drag start
 // =======================
 function onDragStart(source, piece) {
-  // Prevent dragging if input is locked or no puzzle
   if (inputLocked || !puzzle) return false;
-  // Don't clear highlights just because the user picked up a piece
+
+  const settings = window.getSettings ? window.getSettings() : {};
+  if (settings.legalMoves) {
+    clearLegalDots();
+    const moves = game.moves({ square: source, verbose: true });
+    moves.forEach(m => {
+      const el = document.querySelector(`.square-${m.to}`);
+      if (!el) return;
+      // If there's a piece on that square it's a capture — show ring instead
+      if (m.captured) el.classList.add("legal-dot-capture");
+      else el.classList.add("legal-dot");
+    });
+  }
+
   return true;
+}
+
+function clearLegalDots() {
+  document.querySelectorAll(".legal-dot, .legal-dot-capture").forEach(el => {
+    el.classList.remove("legal-dot", "legal-dot-capture");
+  });
 }
 
 // =======================
@@ -331,6 +375,7 @@ function runAutoSequence() {
 // MOVE HANDLER
 // =======================
 function onDrop(source, target) {
+  clearLegalDots();
   if (inputLocked || !puzzle) return "snapback";
 
   const expected = puzzle.solution[step];

@@ -1,4 +1,4 @@
-console.log("♟ FaithChess Play loaded");
+const settings = window.getSettings ? window.getSettings() : {};
 
 // =======================
 // BOARD + GAME
@@ -7,31 +7,72 @@ const boardEl = document.getElementById("board");
 if (!boardEl) throw new Error("No #board element found");
 
 const game = new Chess();
-let board = Chessboard("board", {
+const board = Chessboard("board", {
+  draggable: true,
+  moveSpeed: 200,
+  snapSpeed: 150,
+  snapbackSpeed: 200,
   position: "start",
-  draggable: false,
   pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
-  onDrop,
-  onDragStart,
+  onDrop: onDrop,
+  onDragStart: onDragStart,
+  onMouseoverSquare: onMouseoverSquare, 
+  onMouseoutSquare: onMouseoutSquare,   
+  onSnapbackEnd: () => clearLegalDots(),
 });
 
 let myColor = null;
 let currentGameId = null;
 
+function onMouseoverSquare(square, piece) {
+  const settings = window.getSettings ? window.getSettings() : {};
+  if (!settings.legalMoves) return;
+  if (inputLocked || !puzzle) return;
+
+  const moves = game.moves({ square, verbose: true });
+  if (!moves.length) return;
+}
+
+function onMouseoutSquare(square, piece) {
+  const settings = window.getSettings ? window.getSettings() : {};
+  if (!settings.legalMoves) return;
+
+  // Only clear blue highlights, leave green/red from move feedback
+  document.querySelectorAll(".highlight-blue").forEach(el => {
+    el.classList.remove("highlight-blue");
+  });
+}
+
 // =======================
 // DRAG GUARDS
 // =======================
 function onDragStart(source, piece) {
-  if (!myColor) return false;
-  if (game.game_over()) return false;
-  if (myColor === "white" && piece.startsWith("b")) return false;
-  if (myColor === "black" && piece.startsWith("w")) return false;
-  if (myColor === "white" && game.turn() !== "w") return false;
-  if (myColor === "black" && game.turn() !== "b") return false;
+  if (inputLocked || !puzzle) return false;
+
+  const settings = window.getSettings ? window.getSettings() : {};
+  if (settings.legalMoves) {
+    clearLegalDots();
+    const moves = game.moves({ square: source, verbose: true });
+    moves.forEach(m => {
+      const el = document.querySelector(`.square-${m.to}`);
+      if (!el) return;
+      // If there's a piece on that square it's a capture — show ring instead
+      if (m.captured) el.classList.add("legal-dot-capture");
+      else el.classList.add("legal-dot");
+    });
+  }
+
   return true;
 }
 
+function clearLegalDots() {
+  document.querySelectorAll(".legal-dot, .legal-dot-capture").forEach(el => {
+    el.classList.remove("legal-dot", "legal-dot-capture");
+  });
+}
+
 function onDrop(source, target) {
+  clearLegalDots();
   const move = game.move({ from: source, to: target, promotion: "q" });
   if (!move) return "snapback";
   board.position(game.fen(), false); // ← false = no animation for your own move
@@ -252,6 +293,8 @@ const sounds = {
 };
 
 function playSound(name) {
+  if(!settings.sound) return;
+
   const s = sounds[name];
   if (!s) return;
   s.currentTime = 0;

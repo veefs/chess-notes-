@@ -33,10 +33,12 @@ onAuthStateChanged(auth, async user => {
     if (navUser) { navUser.textContent = username; navUser.classList.remove("hidden"); }
     if (dropdown) {
       dropdown.innerHTML = `
-        <div class="cog-item cog-user">👤 ${username}</div>
-        <div class="cog-divider"></div>
-        <div class="cog-item" id="signOutBtn">Sign Out</div>
-      `;
+  <div class="cog-item cog-user">👤 ${username}</div>
+  <div class="cog-divider"></div>
+  <div class="cog-item" onclick="window.location.href='settings.html'">Settings</div>
+  <div class="cog-divider"></div>
+  <div class="cog-item" id="signOutBtn">Sign Out</div>
+`;
       document.getElementById("signOutBtn").onclick = () => signOut(auth).then(() => location.reload());
     }
   } else {
