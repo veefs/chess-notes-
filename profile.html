@@ -93,9 +93,9 @@
 <script type="module" src="auth.js"></script>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
   import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAUdXVlmN9xhhIzubK0MTtGO3hA9JkHClA",
@@ -107,7 +107,8 @@
     appId: "1:132292001988:web:3c9b7227f1b09766b48991"
   };
 
-  const app = initializeApp(firebaseConfig);
+  // Reuse existing app if already initialized by auth.js
+  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const auth = getAuth(app);
 
@@ -274,6 +275,7 @@
     };
   }
 </script>
+
 <script src="settings.js"></script>
 </body>
 </html>
