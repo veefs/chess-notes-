@@ -4,63 +4,37 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>FaithChess Home</title>
-
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
 </head>
 <body>
 
-<header>
-  <div class="logo">♟ FaithChess</div>
-  <div class="nav">
-    <div class="nav-item active" onclick="window.location.href='index.html';">Home</div>
-    <div class="nav-item" onclick="window.location.href='play.html';">Play</div>
-    <div class="nav-item" onclick="window.location.href='puzzles.html';">Puzzles</div>
-    <div class="nav-item" onclick="window.location.href='watch.html';">Watch</div>
-    <div class="nav-item" onclick="window.location.href='theory.html';">Theory</div>
-  </div>
-</header>
+<header></header>
 
 <main>
-
 <section class="hero">
   <h1>Master Chess with Precision</h1>
   <p>Openings. Tactics. Endgames. Built like a weapon.</p>
 </section>
-
 <section class="section" style="margin-right: 0;">
   <div class="board-wrap">
-
-    <div class="player-bar top" id="black-bar">
-      ⚫ Black
-    </div>
-
-    <div id="board"></div>
-
-    <div class="player-bar bottom" id="white-bar">
-      ⚪ White
-    </div>
-
+    <div class="player-bar top" id="black-bar">⚫ Black</div>
+    <div id="board" style="margin: auto;"></div>
+    <div class="player-bar bottom" id="white-bar">⚪ White</div>
   </div>
 </section>
-
 </main>
 
-<footer>
-  © 2026 FaithChess — Built for everyone
-</footer>
+<footer>© 2026 FaithChess — Built for everyone</footer>
 
-<!-- dependencies FIRST -->
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
+<script src="nav.js"></script>
+<script type="module" src="auth.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
-
-<!-- THEN your script -->
+<script src="settings.js"></script>
 <script src="live.js"></script>
-
 </body>
 </html>
