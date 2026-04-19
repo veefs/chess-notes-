@@ -170,6 +170,7 @@
       <button class="ctrl-btn" id="btnLast">⏭</button>
     </div>
     <div class="move-list" id="moveList"></div>
+    <button class="ctrl-btn" id="btnCopyPgn" style="width:100%;margin-top:4px;">Copy PGN</button>
   </div>
 </div>
 
@@ -332,27 +333,75 @@
   }
 
   // ── Game history ────────────────────────────────────────────────────────────
+  function findClosestGameId(timestampMap, playedAt) {
+    if (!playedAt) return null;
+    let best = null, bestDiff = Infinity;
+    for (const [ts, id] of Object.entries(timestampMap)) {
+      const diff = Math.abs(Number(ts) - playedAt);
+      if (diff < bestDiff) { bestDiff = diff; best = id; }
+    }
+    return best;
+  }
+
   async function loadGameHistory(uid) {
     const listEl = document.getElementById("gameList");
 
-    // Try saved gameHistory first
-    const historySnap = await get(ref(db, `users/${uid}/gameHistory`));
-    const savedHistory = historySnap.val();
+    let savedHistory = null;
+    try {
+      const historySnap = await get(ref(db, `users/${uid}/gameHistory`));
+      savedHistory = historySnap.val();
+    } catch (e) { savedHistory = null; }
+
     if (savedHistory) {
-      // savedHistory entries must include gameId when written by play.html
       const entries = Object.entries(savedHistory)
-        .map(([key, val]) => ({ gameId: val.gameId || key, ...val }))
+        .map(([key, val]) => ({ ...val, gameId: val.gameId || null }))
         .reverse();
+
+      // For entries missing gameId, try to find them by timestamp
+      const needsLookup = entries.filter(e => !e.gameId && e.playedAt);
+      if (needsLookup.length > 0) {
+        const [asWhiteSnap, asBlackSnap] = await Promise.all([
+          get(query(ref(db, "games"), orderByChild("white/uid"), equalTo(uid))),
+          get(query(ref(db, "games"), orderByChild("black/uid"), equalTo(uid))),
+        ]);
+          // Build lookup: "opponentUsername|moveCount|myColor" → [gameId, ...]
+        const gameIndex = {};
+        const addToIndex = (s, myColor) => s.forEach(snap => {
+          const d = snap.val();
+          if (!d) return;
+          const opponent = myColor === "white" ? d.black?.username : d.white?.username;
+          const moveCount = d.moves ? Object.keys(d.moves).length : 0;
+          const key = `${opponent}|${moveCount}|${myColor}`;
+          if (!gameIndex[key]) gameIndex[key] = [];
+          gameIndex[key].push({ id: snap.key, createdAt: d.createdAt || 0 });
+        });
+        addToIndex(asWhiteSnap, "white");
+        addToIndex(asBlackSnap, "black");
+
+        for (const e of entries) {
+          if (!e.gameId) {
+            const key = `${e.opponentUsername}|${e.moveCount}|${e.myColor}`;
+            const candidates = gameIndex[key];
+            if (candidates?.length === 1) {
+              e.gameId = candidates[0].id;
+            } else if (candidates?.length > 1) {
+              // Pick closest by time
+              candidates.sort((a, b) => Math.abs(a.createdAt - e.playedAt) - Math.abs(b.createdAt - e.playedAt));
+              e.gameId = candidates[0].id;
+            }
+          }
+        }
+      }
+
       renderGameList(entries);
       return;
     }
 
-    // Fallback: query the games node directly
+    // No savedHistory — query games node directly
     const [asWhiteSnap, asBlackSnap] = await Promise.all([
       get(query(ref(db, "games"), orderByChild("white/uid"), equalTo(uid))),
       get(query(ref(db, "games"), orderByChild("black/uid"), equalTo(uid))),
     ]);
-
     const rawGames = [];
     asWhiteSnap.forEach(s => { const d = s.val(); if (d) rawGames.push({ ...d, _myColor: "white", _gameId: s.key }); });
     asBlackSnap.forEach(s => { const d = s.val(); if (d) rawGames.push({ ...d, _myColor: "black", _gameId: s.key }); });
@@ -439,8 +488,9 @@
   let viewerIndex = 0;
 
   async function openGameViewer(gameId, myColor, opponent) {
-    const snap     = await get(ref(db, `games/${gameId}/moves`));
-    const movesRaw = snap.val();
+    const snap     = await get(ref(db, `games/${gameId}`));
+    const gameData = snap.val();
+    const movesRaw = gameData?.moves;
     viewerMoves = movesRaw ? Object.values(movesRaw) : [];
     viewerIndex = viewerMoves.length;
 
@@ -489,6 +539,14 @@
     }
   }
 
+  document.getElementById("btnCopyPgn").onclick = () => {
+    const btn = document.getElementById("btnCopyPgn");
+    const pgn = viewerMoves.map((m, i) => (i % 2 === 0 ? `${Math.floor(i/2)+1}. ` : "") + m).join(" ");
+    navigator.clipboard.writeText(pgn).then(() => {
+      btn.textContent = "Copied!";
+      setTimeout(() => btn.textContent = "Copy PGN", 2000);
+    });
+  };
   document.getElementById("btnFirst").onclick   = () => goToMove(0);
   document.getElementById("btnPrev").onclick    = () => goToMove(viewerIndex - 1);
   document.getElementById("btnNext").onclick    = () => goToMove(viewerIndex + 1);

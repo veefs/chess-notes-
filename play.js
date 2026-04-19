@@ -228,6 +228,7 @@ async function saveGameResult(data) {
       moveCount: game.history().length,
       playedAt: Date.now(),
       ratingChange,
+      gameId: currentGameId,
     }),
     set(ref(db, `games/${currentGameId}/status`), "finished"),
   ]);
