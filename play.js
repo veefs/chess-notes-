@@ -131,20 +131,52 @@ function startGame(gameId, color) {
 // =======================
 // PLAYER BARS
 // =======================
-function updatePlayerBars(data) {
+const TITLE_LABELS = {
+  dev: { label: "</> Developer", color: "#74ebcb" },
+  gm:  { label: "GM",           color: "#f0c040" },
+  im:  { label: "IM",           color: "#aaaaaa" },
+  fm:  { label: "FM",           color: "#d4956a" },
+  cm:  { label: "CM",           color: "#7ecf7e" },
+  nm:  { label: "NM",           color: "#7ab8e0" },
+  mod: { label: "Mod",          color: "#f08080" },
+};
+
+const titleCache = {};
+
+async function fetchTitle(uid) {
+  if (titleCache[uid] !== undefined) return titleCache[uid];
+  return import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
+    .then(({ ref, get }) => get(ref(window.firebaseDb, `users/${uid}/title`)))
+    .then(snap => { titleCache[uid] = snap.val() || null; return titleCache[uid]; });
+}
+
+function titleTag(key) {
+  const t = key && TITLE_LABELS[key];
+  if (!t) return "";
+  return ` <span style="font-size:11px;font-weight:700;color:${t.color};letter-spacing:.5px;">${t.label}</span>`;
+}
+
+async function updatePlayerBars(data) {
   const topBar = document.getElementById("black-bar");
   const bottomBar = document.getElementById("white-bar");
   if (!topBar || !bottomBar) return;
 
   const whiteUsername = data.white?.username || "White";
   const blackUsername = data.black?.username || "Black";
+  const whiteUid = data.white?.uid;
+  const blackUid = data.black?.uid;
+
+  const [whiteTitle, blackTitle] = await Promise.all([
+    whiteUid ? fetchTitle(whiteUid) : null,
+    blackUid ? fetchTitle(blackUid) : null,
+  ]);
 
   if (myColor === "white") {
-    bottomBar.textContent = `⚪ ${whiteUsername} (You)`;
-    topBar.textContent = `⚫ ${blackUsername}`;
+    bottomBar.innerHTML = `⚪ ${whiteUsername}${titleTag(whiteTitle)} <span style="color:var(--muted);font-size:11px;">(You)</span>`;
+    topBar.innerHTML = `⚫ ${blackUsername}${titleTag(blackTitle)}`;
   } else {
-    bottomBar.textContent = `⚫ ${blackUsername} (You)`;
-    topBar.textContent = `⚪ ${whiteUsername}`;
+    bottomBar.innerHTML = `⚫ ${blackUsername}${titleTag(blackTitle)} <span style="color:var(--muted);font-size:11px;">(You)</span>`;
+    topBar.innerHTML = `⚪ ${whiteUsername}${titleTag(whiteTitle)}`;
   }
 }
 
