@@ -25,7 +25,7 @@ window.firebaseSignOut = signOut;
 window.firebaseOnAuthChanged = onAuthStateChanged;
 
 const NAV_TITLES = {
-  dev: { label: "&lt;/&gt; Developer", color: "#74ebcb" },
+  dev: { label: "DEV", color: "#74ebcb" },
   gm:  { label: "GM",        color: "#f0c040" },
   im:  { label: "IM",        color: "#aaaaaa" },
   fm:  { label: "FM",        color: "#d4956a" },
