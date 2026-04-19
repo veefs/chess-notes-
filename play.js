@@ -7,7 +7,7 @@ const boardEl = document.getElementById("board");
 if (!boardEl) throw new Error("No #board element found");
 
 const game = new Chess();
-const board = Chessboard("board", {
+let board = Chessboard("board", {
   draggable: true,
   moveSpeed: 200,
   snapSpeed: 150,
@@ -16,8 +16,6 @@ const board = Chessboard("board", {
   pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
   onDrop: onDrop,
   onDragStart: onDragStart,
-  onMouseoverSquare: onMouseoverSquare, 
-  onMouseoutSquare: onMouseoutSquare,   
   onSnapbackEnd: () => clearLegalDots(),
 });
 
@@ -47,7 +45,10 @@ function onMouseoutSquare(square, piece) {
 // DRAG GUARDS
 // =======================
 function onDragStart(source, piece) {
-  if (inputLocked || !puzzle) return false;
+  if (!currentGameId) return false;
+  // Only allow moving your own pieces on your turn
+  if (myColor === "white" && game.turn() !== "w") return false;
+  if (myColor === "black" && game.turn() !== "b") return false;
 
   const settings = window.getSettings ? window.getSettings() : {};
   if (settings.legalMoves) {
@@ -56,7 +57,6 @@ function onDragStart(source, piece) {
     moves.forEach(m => {
       const el = document.querySelector(`.square-${m.to}`);
       if (!el) return;
-      // If there's a piece on that square it's a capture — show ring instead
       if (m.captured) el.classList.add("legal-dot-capture");
       else el.classList.add("legal-dot");
     });

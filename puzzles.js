@@ -19,7 +19,7 @@ let solutionPlaying = false;
 // =======================
 const game = new Chess();
 
-const board = Chessboard("board", {
+let board = Chessboard("board", {
   draggable: true,
   moveSpeed: 200,
   snapSpeed: 150,
@@ -28,8 +28,6 @@ const board = Chessboard("board", {
   pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
   onDrop: onDrop,
   onDragStart: onDragStart,
-  onMouseoverSquare: onMouseoverSquare, 
-  onMouseoutSquare: onMouseoutSquare,  
   onSnapbackEnd: () => clearLegalDots(),
 });
 
