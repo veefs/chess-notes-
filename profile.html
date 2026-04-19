@@ -264,6 +264,75 @@
   } else {
     titleEl.innerHTML = "";
   }
+
+  
+}
+
+
+function renderGameList(games) {
+  const listEl = document.getElementById("gameList");
+
+  if (!games || games.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No games found.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = "";
+
+  games.forEach(g => {
+    const div = document.createElement("div");
+
+    const resultClass =
+      g.result === "win" ? "win" :
+      g.result === "loss" ? "loss" : "draw";
+
+    div.className = `game-entry ${resultClass}`;
+
+    div.innerHTML = `
+      <div class="game-result">${g.result || "draw"}</div>
+      <div>
+        <div class="game-opponent">${g.opponentUsername || "Unknown"}</div>
+        <div class="game-meta">${g.playedAt ? new Date(g.playedAt).toLocaleDateString() : ""}</div>
+      </div>
+      <div class="game-rating-change"></div>
+      <div class="game-moves">${g.moveCount || 0} moves</div>
+    `;
+
+    listEl.appendChild(div);
+  });
+}
+
+
+function loadFriends(uid, friends = {}) {
+  const listEl = document.getElementById("friendsList");
+
+  const entries = Object.entries(friends || {});
+
+  if (entries.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">No friends yet.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = "";
+
+  entries.forEach(([friendUid, data]) => {
+    const div = document.createElement("div");
+    div.className = "friend-item";
+
+    div.innerHTML = `
+      <div class="friend-avatar">${(data.username || "?")[0].toUpperCase()}</div>
+      <div>
+        <div class="friend-name">${data.username || "Unknown"}</div>
+        <div class="friend-rating">Rating: ${data.rating || "—"}</div>
+      </div>
+    `;
+
+    div.onclick = () => {
+      window.location.href = `profile.html?user=${data.username}`;
+    };
+
+    listEl.appendChild(div);
+  });
 }
 
 
