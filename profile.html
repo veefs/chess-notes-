@@ -121,7 +121,7 @@
       <!-- Only shown on other players' profiles -->
       <button class="challenge-btn hidden" id="challengeBtn">⚔ Challenge</button>
       <div class="other-profile-banner hidden" id="otherBanner">
-        <span>Viewing another player</span>
+        <span>Viewing another player's profile</span>
         <a href="profile.html">← My Profile</a>
       </div>
 
@@ -204,25 +204,24 @@
   const db   = getDatabase(app);
   const auth = getAuth(app);
 
-  // ── Whose profile? ──────────────────────────────────────────────────────────
   const params       = new URLSearchParams(window.location.search);
   const viewUsername = params.get("user"); // null = own profile
 
   const TITLES = {
-    dev: { label: "Developer", cls: "title-dev" },
-    gm:  { label: "GM",        cls: "title-gm"  },
-    im:  { label: "IM",        cls: "title-im"  },
-    fm:  { label: "FM",        cls: "title-fm"  },
-    cm:  { label: "CM",        cls: "title-cm"  },
-    nm:  { label: "NM",        cls: "title-nm"  },
-    mod: { label: "Mod",       cls: "title-mod" },
+    dev: { label: "</> Developer", cls: "title-dev" },
+    gm:  { label: "GM",  cls: "title-gm"  },
+    im:  { label: "IM",  cls: "title-im"  },
+    fm:  { label: "FM",  cls: "title-fm"  },
+    cm:  { label: "CM",  cls: "title-cm"  },
+    nm:  { label: "NM",  cls: "title-nm"  },
+    mod: { label: "Mod", cls: "title-mod" },
   };
 
   onAuthStateChanged(auth, async user => {
     if (!user) { window.location.href = "login.html"; return; }
 
     if (viewUsername) {
-      // ── Viewing someone else ──────────────────────────────────────────────
+      // ── Viewing someone else's profile ──────────────────────────────────
       document.getElementById("otherBanner").classList.remove("hidden");
       document.getElementById("friendsSection").style.display = "none";
 
@@ -235,12 +234,7 @@
       }
 
       const targetUid = uidSnap.val();
-
-      // Redirect cleanly if somehow viewing own profile via ?user=
-      if (targetUid === user.uid) {
-        window.location.href = "profile.html";
-        return;
-      }
+      if (targetUid === user.uid) { window.location.href = "profile.html"; return; }
 
       const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, titleSnap, myUsernameSnap] =
         await Promise.all([
@@ -254,7 +248,6 @@
         ]);
 
       const targetUsername = usernameSnap.val() || viewUsername;
-      const myUsername     = myUsernameSnap.val() || user.email;
 
       renderProfile({
         username: targetUsername,
@@ -265,10 +258,9 @@
         title:    titleSnap.val(),
       });
 
-      // Same robust game history logic works for any uid
       loadGameHistory(targetUid);
 
-      // Challenge button
+      // Challenge button — delegates to challenges.js via window.sendChallenge
       const btn = document.getElementById("challengeBtn");
       btn.classList.remove("hidden");
       btn.onclick = async () => {
@@ -283,7 +275,7 @@
       };
 
     } else {
-      // ── Own profile ────────────────────────────────────────────────────────
+      // ── Own profile ─────────────────────────────────────────────────────
       const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, friendsSnap, titleSnap] =
         await Promise.all([
           get(ref(db, `users/${user.uid}/username`)),
@@ -296,17 +288,19 @@
         ]);
 
       const username = usernameSnap.val();
-      renderProfile({
+      const data = {
         username,
         rating:  ratingSnap.val(),
         wins:    winsSnap.val(),
         losses:  lossesSnap.val(),
         draws:   drawsSnap.val(),
+        friends: friendsSnap.val() || {},
         title:   titleSnap.val() || null,
-      });
+      };
 
+      renderProfile(data);
       loadGameHistory(user.uid);
-      loadFriends(user.uid, friendsSnap.val() || {});
+      loadFriends(user.uid, data.friends);
       setupAddFriend(user.uid, username);
     }
   });
@@ -345,7 +339,7 @@
   async function loadGameHistory(uid) {
     const listEl = document.getElementById("gameList");
 
-    // Try saved gameHistory first
+    // Try saved gameHistory first (written by play.html on game end)
     const historySnap = await get(ref(db, `users/${uid}/gameHistory`));
     const savedHistory = historySnap.val();
     if (savedHistory) {
@@ -374,16 +368,27 @@
       const myColor  = g._myColor;
       const opponent = myColor === "white" ? g.black : g.white;
       const moves    = g.moves ? Object.values(g.moves) : [];
-      const chess    = new Chess();
-      for (const m of moves) chess.move(m);
 
+      // Determine result — check winner/status fields first, fall back to chess.js
       let result = "draw";
-      if (chess.in_checkmate()) {
-        const loserColor = chess.turn() === "w" ? "white" : "black";
-        result = myColor === loserColor ? "loss" : "win";
-      } else if (!chess.game_over()) {
-        result = "draw";
+      const status = g.status || "";
+
+      if (g.winner) {
+        result = g.winner === uid ? "win" : "loss";
+      } else if (status === "white") {
+        result = myColor === "white" ? "win" : "loss";
+      } else if (status === "black") {
+        result = myColor === "black" ? "win" : "loss";
+      } else if (status === "checkmate" || status === "over") {
+        const chess = new Chess();
+        for (const m of moves) chess.move(m);
+        if (chess.in_checkmate()) {
+          const loserTurn = chess.turn();
+          result = (loserTurn === "w" && myColor === "black") ||
+                   (loserTurn === "b" && myColor === "white") ? "win" : "loss";
+        }
       }
+      // status === "playing" stays as "draw" (in progress)
 
       return {
         result,
@@ -391,7 +396,7 @@
         myColor,
         moveCount:    moves.length,
         playedAt:     g.createdAt || null,
-        ratingChange: null,
+        ratingChange: g.ratingChange ?? null,
         gameId:       g._gameId || null,
       };
     });
@@ -399,15 +404,17 @@
     renderGameList(mapped);
   }
 
+  // ── Render game list ────────────────────────────────────────────────────────
   function renderGameList(games) {
     const listEl = document.getElementById("gameList");
     listEl.innerHTML = "";
+
     if (!games.length) {
       listEl.innerHTML = `<div class="empty-state">No games yet. <a href="play.html" style="color:var(--accent)">Play now →</a></div>`;
       return;
     }
+
     for (const g of games) {
-      const ratingChange = g.ratingChange;
       const entry = document.createElement("div");
       entry.className = `game-entry ${g.result}`;
       entry.innerHTML = `
@@ -417,7 +424,7 @@
           <div class="game-meta">${g.myColor === "white" ? "White" : "Black"} · ${g.playedAt ? new Date(g.playedAt).toLocaleDateString() : ""}</div>
         </div>
         <div class="game-moves">${g.moveCount ?? "?"} moves</div>
-        <div class="game-rating-change">${ratingChange != null ? (ratingChange >= 0 ? "+" : "") + ratingChange : "—"}</div>
+        <div class="game-rating-change">${g.ratingChange != null ? (g.ratingChange >= 0 ? "+" : "") + g.ratingChange : "—"}</div>
       `;
       if (g.gameId) {
         entry.onclick = () => openGameViewer(g.gameId, g.myColor, g.opponentUsername);
@@ -502,7 +509,7 @@
 
   // ── Friends ─────────────────────────────────────────────────────────────────
   async function loadFriends(uid, friends) {
-    const listEl   = document.getElementById("friendsList");
+    const listEl = document.getElementById("friendsList");
     listEl.innerHTML = "";
 
     const reqSnap  = await get(ref(db, `users/${uid}/friendRequests`));
@@ -563,6 +570,7 @@
     }
   }
 
+  // ── Add friend ──────────────────────────────────────────────────────────────
   function setupAddFriend(myUid, myUsername) {
     document.getElementById("addFriendBtn").onclick = async () => {
       const input          = document.getElementById("friendInput");
