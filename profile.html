@@ -88,7 +88,9 @@
 
 <footer>© 2026 FaithChess — Built for everyone</footer>
 
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="nav.js"></script>
+<script type="module" src="auth.js"></script>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -122,7 +124,6 @@
     ]);
 
     const username = usernameSnap.val();
-
     const data = {
       username,
       rating: ratingSnap.val(),
@@ -140,7 +141,7 @@
 
   function renderProfile(data) {
     const username = data.username || "Unknown";
-    const rating = data.rating ?? 1200;
+    const rating = data.rating ?? 800;
     const wins = data.wins ?? 0;
     const losses = data.losses ?? 0;
     const draws = data.draws ?? 0;
@@ -188,7 +189,6 @@
     const listEl = document.getElementById("friendsList");
     listEl.innerHTML = "";
 
-    // Incoming requests
     const reqSnap = await get(ref(db, `users/${uid}/friendRequests`));
     const requests = reqSnap.val() || {};
 
@@ -202,7 +202,6 @@
           <button class="btn-decline" data-uid="${fromUid}">Decline</button>
         </div>
       `;
-
       item.querySelector(".btn-accept").onclick = async () => {
         await set(ref(db, `users/${uid}/friends/${fromUid}`), true);
         await set(ref(db, `users/${fromUid}/friends/${uid}`), true);
@@ -210,17 +209,14 @@
         const freshSnap = await get(ref(db, `users/${uid}/friends`));
         loadFriends(uid, freshSnap.val() || {});
       };
-
       item.querySelector(".btn-decline").onclick = async () => {
         await set(ref(db, `users/${uid}/friendRequests/${fromUid}`), null);
         const freshSnap = await get(ref(db, `users/${uid}/friends`));
         loadFriends(uid, freshSnap.val() || {});
       };
-
       listEl.appendChild(item);
     }
 
-    // Friends list
     const uids = Object.keys(friends);
     if (uids.length === 0 && Object.keys(requests).length === 0) {
       listEl.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:4px 0;">No friends yet.</div>`;
@@ -233,7 +229,7 @@
         get(ref(db, `users/${fUid}/rating`)),
       ]);
       const fname = nameSnap.val() || "Unknown";
-      const fRating = ratingSnap.val() ?? 1200;
+      const fRating = ratingSnap.val() ?? 800;
       const item = document.createElement("div");
       item.className = "friend-item";
       item.innerHTML = `
