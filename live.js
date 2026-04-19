@@ -1,5 +1,3 @@
-console.log("🚀 live.js loaded");
-
 const boardEl = document.getElementById("board");
 
 if (!boardEl) {

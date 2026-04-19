@@ -117,7 +117,6 @@ main {
 .section {
   padding: 40px 24px;
   max-width: 900px;
-  margin: auto;
 }
 
 .board-wrap {
@@ -668,3 +667,11 @@ footer {
 }
 
 .auth-switch a:hover { text-decoration: underline; }
+
+.nav-username {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: 12px;
+  align-self: center;
+}
