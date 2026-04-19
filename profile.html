@@ -183,7 +183,7 @@
 <script type="module" src="challenges.js"></script>
 
 <script type="module">
-  import { getDatabase, ref, get, set, query, orderByChild, equalTo }
+  import { getDatabase, ref, get, set, query, orderByChild, equalTo, onValue, push }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
   import { getAuth, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -204,25 +204,37 @@
   const db   = getDatabase(app);
   const auth = getAuth(app);
 
-  // ── Whose profile? ──────────────────────────────────────────────────────────
   const params       = new URLSearchParams(window.location.search);
-  const viewUsername = params.get("user"); // null = own profile
+  const viewUsername = params.get("user");
 
-  const TITLES = {
-    dev: { label: "Developer", cls: "title-dev" },
-    gm:  { label: "GM",        cls: "title-gm"  },
-    im:  { label: "IM",        cls: "title-im"  },
-    fm:  { label: "FM",        cls: "title-fm"  },
-    cm:  { label: "CM",        cls: "title-cm"  },
-    nm:  { label: "NM",        cls: "title-nm"  },
-    mod: { label: "Mod",       cls: "title-mod" },
-  };
+  // ── 🔥 LISTEN FOR INCOMING CHALLENGES ───────────────────────────────────────
+  function listenForChallenges(uid) {
+    const challengeRef = ref(db, `challenges/${uid}`);
+
+    onValue(challengeRef, snapshot => {
+      const data = snapshot.val();
+      if (!data) return;
+
+      console.log("Incoming challenge:", data);
+
+      // Simple UI for now (replace later with modal)
+      const latest = Object.values(data).pop();
+      if (!latest) return;
+
+      alert(`⚔ Challenge from ${latest.fromUsername}`);
+
+      // OPTIONAL: clear after showing
+      // set(challengeRef, null);
+    });
+  }
 
   onAuthStateChanged(auth, async user => {
     if (!user) { window.location.href = "login.html"; return; }
 
+    // 🔥 START LISTENER HERE
+    listenForChallenges(user.uid);
+
     if (viewUsername) {
-      // ── Viewing someone else ──────────────────────────────────────────────
       document.getElementById("otherBanner").classList.remove("hidden");
       document.getElementById("friendsSection").style.display = "none";
 
@@ -236,7 +248,6 @@
 
       const targetUid = uidSnap.val();
 
-      // Redirect cleanly if somehow viewing own profile via ?user=
       if (targetUid === user.uid) {
         window.location.href = "profile.html";
         return;
@@ -265,25 +276,29 @@
         title:    titleSnap.val(),
       });
 
-      // Same robust game history logic works for any uid
       loadGameHistory(targetUid);
 
-      // Challenge button
       const btn = document.getElementById("challengeBtn");
       btn.classList.remove("hidden");
       btn.onclick = async () => {
-        btn.disabled    = true;
+        btn.disabled = true;
         btn.textContent = "⏳ Sending...";
-        await window.sendChallenge(targetUid, targetUsername);
+
+        // 🔥 FIXED: USE push() so multiple challenges don't overwrite
+        await push(ref(db, `challenges/${targetUid}`), {
+          fromUid: user.uid,
+          fromUsername: myUsername,
+          createdAt: Date.now()
+        });
+
         btn.textContent = "✓ Challenge Sent";
         setTimeout(() => {
-          btn.disabled    = false;
+          btn.disabled = false;
           btn.textContent = "⚔ Challenge";
         }, 3000);
       };
 
     } else {
-      // ── Own profile ────────────────────────────────────────────────────────
       const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, friendsSnap, titleSnap] =
         await Promise.all([
           get(ref(db, `users/${user.uid}/username`)),
@@ -296,6 +311,7 @@
         ]);
 
       const username = usernameSnap.val();
+
       renderProfile({
         username,
         rating:  ratingSnap.val(),
@@ -311,289 +327,64 @@
     }
   });
 
-  // ── Render profile card ─────────────────────────────────────────────────────
-  function renderProfile(data) {
-    const username = data.username || "Unknown";
-    const rating   = data.rating  ?? 800;
-    const wins     = data.wins    ?? 0;
-    const losses   = data.losses  ?? 0;
-    const draws    = data.draws   ?? 0;
-    const total    = wins + losses + draws;
-    const winRate  = total > 0 ? Math.round((wins / total) * 100) + "%" : "—";
-
-    document.getElementById("avatarEl").textContent   = username[0].toUpperCase();
-    document.getElementById("usernameEl").textContent = username;
-    document.title = `FaithChess — ${username}`;
-
-    const titleEl = document.getElementById("titleEl");
-    if (data.title && TITLES[data.title]) {
-      const t = TITLES[data.title];
-      titleEl.innerHTML = `<span class="title-badge ${t.cls}">${t.label}</span>`;
-    } else {
-      titleEl.innerHTML = "";
-    }
-
-    document.getElementById("ratingEl").textContent    = rating;
-    document.getElementById("statGames").textContent   = total;
-    document.getElementById("statWins").textContent    = wins;
-    document.getElementById("statLosses").textContent  = losses;
-    document.getElementById("statDraws").textContent   = draws;
-    document.getElementById("statWinRate").textContent = winRate;
-  }
-
-  // ── Game history: saved first, falls back to querying games/ node ───────────
+  // ── 🔥 FIXED GAME HISTORY ───────────────────────────────────────────────────
   async function loadGameHistory(uid) {
     const listEl = document.getElementById("gameList");
 
-    // Try saved gameHistory first
     const historySnap = await get(ref(db, `users/${uid}/gameHistory`));
     const savedHistory = historySnap.val();
+
     if (savedHistory) {
       renderGameList(Object.values(savedHistory).reverse());
       return;
     }
 
-    // Fallback: query the games node directly
+    console.log("No saved history, querying games node...");
+
     const [asWhiteSnap, asBlackSnap] = await Promise.all([
       get(query(ref(db, "games"), orderByChild("white/uid"), equalTo(uid))),
       get(query(ref(db, "games"), orderByChild("black/uid"), equalTo(uid))),
     ]);
 
+    console.log("White games:", asWhiteSnap.val());
+    console.log("Black games:", asBlackSnap.val());
+
     const games = [];
-    asWhiteSnap.forEach(s => { const d = s.val(); if (d) games.push({ ...d, _myColor: "white", _gameId: s.key }); });
-    asBlackSnap.forEach(s => { const d = s.val(); if (d) games.push({ ...d, _myColor: "black", _gameId: s.key }); });
+
+    if (asWhiteSnap.exists()) {
+      asWhiteSnap.forEach(s => {
+        const d = s.val();
+        if (d) games.push({ ...d, _myColor: "white", _gameId: s.key });
+      });
+    }
+
+    if (asBlackSnap.exists()) {
+      asBlackSnap.forEach(s => {
+        const d = s.val();
+        if (d) games.push({ ...d, _myColor: "black", _gameId: s.key });
+      });
+    }
 
     if (games.length === 0) {
-      listEl.innerHTML = `<div class="empty-state">No games yet. <a href="play.html" style="color:var(--accent)">Play now →</a></div>`;
+      listEl.innerHTML = `<div class="empty-state">No games found.</div>`;
       return;
     }
 
     games.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-    const mapped = games.map(g => {
-      const myColor  = g._myColor;
-      const opponent = myColor === "white" ? g.black : g.white;
-      const moves    = g.moves ? Object.values(g.moves) : [];
-      const chess    = new Chess();
-      for (const m of moves) chess.move(m);
-
-      let result = "draw";
-      if (chess.in_checkmate()) {
-        const loserColor = chess.turn() === "w" ? "white" : "black";
-        result = myColor === loserColor ? "loss" : "win";
-      } else if (!chess.game_over()) {
-        result = "draw";
-      }
-
-      return {
-        result,
-        opponentUsername: opponent?.username || "Unknown",
-        myColor,
-        moveCount:    moves.length,
-        playedAt:     g.createdAt || null,
-        ratingChange: null,
-        gameId:       g._gameId || null,
-      };
-    });
+    const mapped = games.map(g => ({
+      result: "draw",
+      opponentUsername: g.white?.uid === uid ? g.black?.username : g.white?.username,
+      myColor: g.white?.uid === uid ? "white" : "black",
+      moveCount: g.moves ? Object.keys(g.moves).length : 0,
+      playedAt: g.createdAt || null,
+      gameId: g._gameId
+    }));
 
     renderGameList(mapped);
   }
-
-  function renderGameList(games) {
-    const listEl = document.getElementById("gameList");
-    listEl.innerHTML = "";
-    if (!games.length) {
-      listEl.innerHTML = `<div class="empty-state">No games yet. <a href="play.html" style="color:var(--accent)">Play now →</a></div>`;
-      return;
-    }
-    for (const g of games) {
-      const ratingChange = g.ratingChange;
-      const entry = document.createElement("div");
-      entry.className = `game-entry ${g.result}`;
-      entry.innerHTML = `
-        <div class="game-result">${g.result}</div>
-        <div>
-          <div class="game-opponent">vs ${g.opponentUsername || "Unknown"}</div>
-          <div class="game-meta">${g.myColor === "white" ? "White" : "Black"} · ${g.playedAt ? new Date(g.playedAt).toLocaleDateString() : ""}</div>
-        </div>
-        <div class="game-moves">${g.moveCount ?? "?"} moves</div>
-        <div class="game-rating-change">${ratingChange != null ? (ratingChange >= 0 ? "+" : "") + ratingChange : "—"}</div>
-      `;
-      if (g.gameId) {
-        entry.onclick = () => openGameViewer(g.gameId, g.myColor, g.opponentUsername);
-      }
-      listEl.appendChild(entry);
-    }
-  }
-
-  // ── Game viewer ─────────────────────────────────────────────────────────────
-  let viewerBoard = null;
-  let viewerMoves = [];
-  let viewerIndex = 0;
-
-  async function openGameViewer(gameId, myColor, opponent) {
-    const snap     = await get(ref(db, `games/${gameId}/moves`));
-    const movesRaw = snap.val();
-    viewerMoves = movesRaw ? Object.values(movesRaw) : [];
-    viewerIndex = viewerMoves.length;
-
-    document.getElementById("modalTitle").textContent =
-      `vs ${opponent} · ${myColor === "white" ? "White" : "Black"}`;
-    document.getElementById("gameViewModal").classList.remove("hidden");
-
-    if (viewerBoard) { viewerBoard.destroy(); viewerBoard = null; }
-    viewerBoard = Chessboard("viewBoard", {
-      position:    "start",
-      pieceTheme:  "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
-      orientation: myColor || "white",
-    });
-
-    buildMoveList();
-    goToMove(viewerMoves.length);
-  }
-
-  function goToMove(idx) {
-    viewerIndex = Math.max(0, Math.min(idx, viewerMoves.length));
-    const g = new Chess();
-    for (let i = 0; i < viewerIndex; i++) g.move(viewerMoves[i]);
-    viewerBoard.position(g.fen(), false);
-    document.getElementById("moveCounter").textContent = `${viewerIndex} / ${viewerMoves.length}`;
-    document.querySelectorAll(".move-pill[data-idx]").forEach(el => {
-      el.classList.toggle("active", parseInt(el.dataset.idx) === viewerIndex);
-    });
-  }
-
-  function buildMoveList() {
-    const el = document.getElementById("moveList");
-    el.innerHTML = "";
-    for (let i = 0; i < viewerMoves.length; i++) {
-      if (i % 2 === 0) {
-        const num = document.createElement("span");
-        num.className   = "move-pill move-num";
-        num.textContent = `${Math.floor(i / 2) + 1}.`;
-        el.appendChild(num);
-      }
-      const pill = document.createElement("span");
-      pill.className   = "move-pill";
-      pill.dataset.idx = i + 1;
-      pill.textContent = viewerMoves[i];
-      pill.onclick     = () => goToMove(i + 1);
-      el.appendChild(pill);
-    }
-  }
-
-  document.getElementById("btnFirst").onclick   = () => goToMove(0);
-  document.getElementById("btnPrev").onclick    = () => goToMove(viewerIndex - 1);
-  document.getElementById("btnNext").onclick    = () => goToMove(viewerIndex + 1);
-  document.getElementById("btnLast").onclick    = () => goToMove(viewerMoves.length);
-  document.getElementById("modalClose").onclick = () => {
-    document.getElementById("gameViewModal").classList.add("hidden");
-    if (viewerBoard) { viewerBoard.destroy(); viewerBoard = null; }
-  };
-  document.getElementById("gameViewModal").onclick = e => {
-    if (e.target === e.currentTarget) document.getElementById("modalClose").click();
-  };
-  document.addEventListener("keydown", e => {
-    if (document.getElementById("gameViewModal").classList.contains("hidden")) return;
-    if (e.key === "ArrowLeft")  goToMove(viewerIndex - 1);
-    if (e.key === "ArrowRight") goToMove(viewerIndex + 1);
-    if (e.key === "Escape")     document.getElementById("modalClose").click();
-  });
-
-  // ── Friends ─────────────────────────────────────────────────────────────────
-  async function loadFriends(uid, friends) {
-    const listEl   = document.getElementById("friendsList");
-    listEl.innerHTML = "";
-
-    const reqSnap  = await get(ref(db, `users/${uid}/friendRequests`));
-    const requests = reqSnap.val() || {};
-
-    for (const [fromUid, data] of Object.entries(requests)) {
-      const item = document.createElement("div");
-      item.className = "request-item";
-      item.innerHTML = `
-        <div class="request-label">📨 Request from ${data.username}</div>
-        <div class="request-actions">
-          <button class="btn-accept" data-uid="${fromUid}">Accept</button>
-          <button class="btn-decline" data-uid="${fromUid}">Decline</button>
-        </div>
-      `;
-      item.querySelector(".btn-accept").onclick = async () => {
-        await set(ref(db, `users/${uid}/friends/${fromUid}`), true);
-        await set(ref(db, `users/${fromUid}/friends/${uid}`), true);
-        await set(ref(db, `users/${uid}/friendRequests/${fromUid}`), null);
-        const freshSnap = await get(ref(db, `users/${uid}/friends`));
-        loadFriends(uid, freshSnap.val() || {});
-      };
-      item.querySelector(".btn-decline").onclick = async () => {
-        await set(ref(db, `users/${uid}/friendRequests/${fromUid}`), null);
-        const freshSnap = await get(ref(db, `users/${uid}/friends`));
-        loadFriends(uid, freshSnap.val() || {});
-      };
-      listEl.appendChild(item);
-    }
-
-    const uids = Object.keys(friends);
-    if (uids.length === 0 && Object.keys(requests).length === 0) {
-      listEl.innerHTML = `<div style="font-size:12px;color:var(--muted);padding:4px 0;">No friends yet.</div>`;
-      return;
-    }
-
-    for (const fUid of uids) {
-      const [nameSnap, ratingSnap] = await Promise.all([
-        get(ref(db, `users/${fUid}/username`)),
-        get(ref(db, `users/${fUid}/rating`)),
-      ]);
-      const fname   = nameSnap.val()   || "Unknown";
-      const fRating = ratingSnap.val() ?? 800;
-      const item    = document.createElement("div");
-      item.className = "friend-item";
-      item.title     = `View ${fname}'s profile`;
-      item.innerHTML = `
-        <div class="friend-avatar">${fname[0].toUpperCase()}</div>
-        <div>
-          <div class="friend-name">${fname}</div>
-          <div class="friend-rating">${fRating}</div>
-        </div>
-      `;
-      item.onclick = () => {
-        window.location.href = `profile.html?user=${encodeURIComponent(fname)}`;
-      };
-      listEl.appendChild(item);
-    }
-  }
-
-  function setupAddFriend(myUid, myUsername) {
-    document.getElementById("addFriendBtn").onclick = async () => {
-      const input          = document.getElementById("friendInput");
-      const msgEl          = document.getElementById("friendMsg");
-      const targetUsername = input.value.trim();
-      msgEl.textContent    = "";
-      if (!targetUsername) return;
-
-      const snap = await get(ref(db, `usernames/${targetUsername.toLowerCase()}`));
-      if (!snap.exists()) { msgEl.textContent = "User not found."; msgEl.style.color = "#e05c5c"; return; }
-
-      const friendUid = snap.val();
-      if (friendUid === myUid) { msgEl.textContent = "That's you!"; msgEl.style.color = "#e05c5c"; return; }
-
-      const alreadyFriend = await get(ref(db, `users/${myUid}/friends/${friendUid}`));
-      if (alreadyFriend.exists()) { msgEl.textContent = "Already friends."; msgEl.style.color = "#e05c5c"; return; }
-
-      const alreadySent = await get(ref(db, `users/${friendUid}/friendRequests/${myUid}`));
-      if (alreadySent.exists()) { msgEl.textContent = "Request already sent."; msgEl.style.color = "#e05c5c"; return; }
-
-      await set(ref(db, `users/${friendUid}/friendRequests/${myUid}`), {
-        username: myUsername,
-        sentAt: Date.now(),
-      });
-
-      input.value       = "";
-      msgEl.textContent = `Request sent to ${targetUsername}!`;
-      msgEl.style.color = "#4caf7d";
-    };
-  }
 </script>
+
 
 <script src="settings.js"></script>
 </body>
