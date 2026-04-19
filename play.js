@@ -27,7 +27,6 @@ let currentGameId = null;
 // =======================
 function onDragStart(source, piece) {
   if (!currentGameId) return false;
-  // Only allow moving your own pieces on your turn
   if (myColor === "white" && game.turn() !== "w") return false;
   if (myColor === "black" && game.turn() !== "b") return false;
 
@@ -56,7 +55,7 @@ function onDrop(source, target) {
   clearLegalDots();
   const move = game.move({ from: source, to: target, promotion: "q" });
   if (!move) return "snapback";
-  board.position(game.fen(), false); // ← false = no animation for your own move
+  board.position(game.fen(), false);
   playSound(soundForMove(move, game));
   pushMove();
 }
@@ -86,18 +85,16 @@ function listenToGame(gameId) {
         const data = snap.val();
         if (!data) return;
 
-        // Sync moves from remote
         const remoteMoves = data.moves ? Object.values(data.moves) : [];
-        const localMoves = game.history();
+        const localMoves  = game.history();
 
         if (remoteMoves.length !== localMoves.length) {
           game.reset();
           for (const san of remoteMoves) game.move(san);
-          board.position(game.fen(), true); // ← true = animate opponent's move
+          board.position(game.fen(), true);
           playSound(soundForMove({ captured: game.history({ verbose: true }).at(-1)?.captured }, game));
         }
 
-        // Update player bars
         updatePlayerBars(data);
 
         if (game.game_over()) {
@@ -108,11 +105,11 @@ function listenToGame(gameId) {
 }
 
 // =======================
-// START GAME (called after match found)
+// START GAME
 // =======================
 function startGame(gameId, color) {
   currentGameId = gameId;
-  myColor = color;
+  myColor       = color;
 
   board.destroy();
   board = Chessboard("board", {
@@ -133,12 +130,12 @@ function startGame(gameId, color) {
 // =======================
 const TITLE_LABELS = {
   dev: { label: "</> Developer", color: "#74ebcb" },
-  gm: { label: "GM", color: "#f0c040" },
-  im: { label: "IM", color: "#aaaaaa" },
-  fm: { label: "FM", color: "#d4956a" },
-  cm: { label: "CM", color: "#7ecf7e" },
-  nm: { label: "NM", color: "#7ab8e0" },
-  mod: { label: "Mod", color: "#f08080" },
+  gm:  { label: "GM",           color: "#f0c040" },
+  im:  { label: "IM",           color: "#aaaaaa" },
+  fm:  { label: "FM",           color: "#d4956a" },
+  cm:  { label: "CM",           color: "#7ecf7e" },
+  nm:  { label: "NM",           color: "#7ab8e0" },
+  mod: { label: "Mod",          color: "#f08080" },
 };
 
 const titleCache = {};
@@ -157,14 +154,14 @@ function titleTag(key) {
 }
 
 async function updatePlayerBars(data) {
-  const topBar = document.getElementById("black-bar");
+  const topBar    = document.getElementById("black-bar");
   const bottomBar = document.getElementById("white-bar");
   if (!topBar || !bottomBar) return;
 
   const whiteUsername = data.white?.username || "White";
   const blackUsername = data.black?.username || "Black";
-  const whiteUid = data.white?.uid;
-  const blackUid = data.black?.uid;
+  const whiteUid      = data.white?.uid;
+  const blackUid      = data.black?.uid;
 
   const [whiteTitle, blackTitle] = await Promise.all([
     whiteUid ? fetchTitle(whiteUid) : null,
@@ -173,10 +170,10 @@ async function updatePlayerBars(data) {
 
   if (myColor === "white") {
     bottomBar.innerHTML = `⚪ ${whiteUsername}${titleTag(whiteTitle)} <span style="color:var(--muted);font-size:11px;">(You)</span>`;
-    topBar.innerHTML = `⚫ ${blackUsername}${titleTag(blackTitle)}`;
+    topBar.innerHTML    = `⚫ ${blackUsername}${titleTag(blackTitle)}`;
   } else {
     bottomBar.innerHTML = `⚫ ${blackUsername}${titleTag(blackTitle)} <span style="color:var(--muted);font-size:11px;">(You)</span>`;
-    topBar.innerHTML = `⚪ ${whiteUsername}${titleTag(whiteTitle)}`;
+    topBar.innerHTML    = `⚪ ${whiteUsername}${titleTag(whiteTitle)}`;
   }
 }
 
@@ -186,7 +183,7 @@ async function updatePlayerBars(data) {
 function getGameOverMessage() {
   if (game.in_checkmate()) return `Checkmate! ${game.turn() === "w" ? "Black" : "White"} wins!`;
   if (game.in_stalemate()) return "Stalemate!";
-  if (game.in_draw()) return "Draw!";
+  if (game.in_draw())      return "Draw!";
   return "Game over!";
 }
 
@@ -206,8 +203,6 @@ function joinQueue(uid, username) {
     .then(({ ref, set, remove, onDisconnect }) => {
       const db = window.firebaseDb;
 
-      remove(ref(db, `users/${uid}/currentGame`));
-
       const myQueueRef = ref(db, `queue/${uid}`);
       set(myQueueRef, { uid, username, joinedAt: Date.now() });
       onDisconnect(myQueueRef).remove();
@@ -220,7 +215,7 @@ function joinQueue(uid, username) {
 function tryMatch(myUid, myUsername) {
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
     .then(({ ref, runTransaction }) => {
-      const db = window.firebaseDb;
+      const db       = window.firebaseDb;
       const queueRef = ref(db, "queue");
 
       let matchedOpponent = null;
@@ -242,11 +237,9 @@ function tryMatch(myUid, myUsername) {
         if (!result.committed) return;
 
         if (matchedOpponent) {
-          // We are the matcher — start as white directly, don't listenForGame
           console.log("✅ Matched with:", matchedOpponent.username);
           createGame(myUid, myUsername, matchedOpponent.uid, matchedOpponent.username);
         } else {
-          // No one in queue — we are the waiter, listen for assignment
           console.log("⏳ Waiting for opponent...");
           listenForGame(myUid);
         }
@@ -257,9 +250,9 @@ function tryMatch(myUid, myUsername) {
 function createGame(whiteUid, whiteUsername, blackUid, blackUsername) {
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
     .then(({ ref, set, push }) => {
-      const db = window.firebaseDb;
+      const db      = window.firebaseDb;
       const gameRef = push(ref(db, "games"));
-      const gameId = gameRef.key;
+      const gameId  = gameRef.key;
 
       set(gameRef, {
         white: { uid: whiteUid, username: whiteUsername },
@@ -270,7 +263,6 @@ function createGame(whiteUid, whiteUsername, blackUid, blackUsername) {
         createdAt: Date.now(),
       });
 
-      // Tell both players their game ID
       set(ref(db, `users/${whiteUid}/currentGame`), gameId);
       set(ref(db, `users/${blackUid}/currentGame`), gameId);
 
@@ -300,14 +292,13 @@ function listenForGame(uid) {
 // SOUND SYSTEM
 // =======================
 const sounds = {
-  move: new Audio("sounds/move-self.mp3"),
+  move:    new Audio("sounds/move-self.mp3"),
   capture: new Audio("sounds/capture.mp3"),
-  check: new Audio("sounds/move-check.mp3"),
+  check:   new Audio("sounds/move-check.mp3"),
 };
 
 function playSound(name) {
   if (!settings.sound) return;
-
   const s = sounds[name];
   if (!s) return;
   s.currentTime = 0;
@@ -316,7 +307,7 @@ function playSound(name) {
 
 function soundForMove(move, chessGame) {
   if (chessGame.in_check()) return "check";
-  if (move.captured) return "capture";
+  if (move.captured)        return "capture";
   return "move";
 }
 
@@ -336,28 +327,40 @@ waitForFirebase(() => {
       .then(({ ref, get }) => {
         get(ref(window.firebaseDb, `users/${user.uid}/username`)).then(snap => {
           const username = snap.val() || user.email;
-          window.myUid = user.uid;
+          window.myUid      = user.uid;
           window.myUsername = username;
 
-          // ✅ Check for existing game first
+          // ── Check for challenge redirect first ─────────────────────────
+          const params      = new URLSearchParams(window.location.search);
+          const challengeId = params.get("challenge");
+          const colorParam  = params.get("color");
+
+          if (challengeId && colorParam) {
+            // Came from a challenge accept/redirect — jump straight in
+            console.log(`⚔ Joining challenge game: ${challengeId} as ${colorParam}`);
+            // Clean up URL without reloading
+            window.history.replaceState({}, "", "play.html");
+            startGame(challengeId, colorParam);
+            return;
+          }
+
+          // ── Check for existing normal game ─────────────────────────────
           get(ref(window.firebaseDb, `users/${user.uid}/currentGame`)).then(gameSnap => {
             if (gameSnap.exists()) {
               const gameId = gameSnap.val();
 
-              // Determine color from the game record
               get(ref(window.firebaseDb, `games/${gameId}`)).then(gSnap => {
                 const gameData = gSnap.val();
                 if (!gameData || gameData.status !== "playing") {
-                  // Game is over, join queue normally
                   joinQueue(user.uid, username);
                   return;
                 }
                 const color = gameData.white?.uid === user.uid ? "white" : "black";
                 console.log("🔄 Rejoining existing game:", gameId);
-                startGame(gameId, color); // ← skip queue entirely
+                startGame(gameId, color);
               });
             } else {
-              joinQueue(user.uid, username); // no game, queue as normal
+              joinQueue(user.uid, username);
             }
           });
         });
