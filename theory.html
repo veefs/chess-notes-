@@ -1565,6 +1565,8 @@ function buildEditorBoardInput(block,sanBox,refreshComments,onEngineLineChange){
   let dragHoldTimer=null;
   let pendingDragStart=null;
   let cleanupDone=false;
+  let _stateCache=null;
+  let _stateCacheKey=null;
 
   const selectBtn=el('button','ed-board-btn sel'); selectBtn.textContent='Board input';
   tools.appendChild(selectBtn);
@@ -1573,6 +1575,7 @@ function buildEditorBoardInput(block,sanBox,refreshComments,onEngineLineChange){
   undoBtn.onclick=()=>{
     if(!block.moves.length) return;
     block.moves.pop();
+    invalidateStateCache();
     sanBox.value=(block.moves||[]).map(m=>m.san).filter(Boolean).join(' ');
     refreshComments();
     selected=null; lastFrom=null; lastTo=null; hoverTarget=null; pendingPromotion=null;
@@ -1583,6 +1586,7 @@ function buildEditorBoardInput(block,sanBox,refreshComments,onEngineLineChange){
   const clearBtn=el('button','ed-board-btn'); clearBtn.textContent='Clear';
   clearBtn.onclick=()=>{
     block.moves=[];
+    invalidateStateCache();
     sanBox.value='';
     refreshComments();
     selected=null; lastFrom=null; lastTo=null; hoverTarget=null; pendingPromotion=null;
@@ -1715,19 +1719,22 @@ function buildEditorBoardInput(block,sanBox,refreshComments,onEngineLineChange){
   }
 
   function stateFromMoves(){
+    const cacheKey = (block.moves||[]).map(m=>m.san||'').join(',');
+    if(_stateCache && _stateCacheKey === cacheKey) return _stateCache;
+
     if(typeof Chess !== 'function'){
-      return {
+      _stateCache = {
         board: f2b('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'),
-        turn: 'w',
-        badIndex: -1,
+        turn: 'w', badIndex: -1,
         fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
         game: null
       };
+      _stateCacheKey = cacheKey;
+      return _stateCache;
     }
 
     const game = new Chess();
     let badIndex = -1;
-
     for(let i=0;i<(block.moves||[]).length;i++){
       const san = (block.moves[i]?.san || '').trim();
       if(!san) continue;
@@ -1735,7 +1742,7 @@ function buildEditorBoardInput(block,sanBox,refreshComments,onEngineLineChange){
       if(!res){ badIndex = i; break; }
     }
 
-    return {
+    _stateCache = {
       board: boardFromChessJs(game),
       turn: game.turn(),
       badIndex,
@@ -1743,7 +1750,11 @@ function buildEditorBoardInput(block,sanBox,refreshComments,onEngineLineChange){
       game,
       checkSquare: checkedKingSquareFromGame(game)
     };
+    _stateCacheKey = cacheKey;
+    return _stateCache;
   }
+
+  function invalidateStateCache(){ _stateCache = null; _stateCacheKey = null; }
 
   function sqToCoords(square){
     return {
@@ -1759,6 +1770,7 @@ function buildEditorBoardInput(block,sanBox,refreshComments,onEngineLineChange){
   function commitMoveResult(res){
     if(!res || !res.san) return false;
     block.moves.push({ san: res.san, comment: '' });
+    invalidateStateCache();
     sanBox.value = (block.moves||[]).map(m=>m.san).filter(Boolean).join(' ');
     refreshComments();
     lastFrom = sqToCoords(res.from);
