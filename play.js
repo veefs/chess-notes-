@@ -133,12 +133,12 @@ function startGame(gameId, color) {
 // =======================
 const TITLE_LABELS = {
   dev: { label: "</> Developer", color: "#74ebcb" },
-  gm:  { label: "GM",           color: "#f0c040" },
-  im:  { label: "IM",           color: "#aaaaaa" },
-  fm:  { label: "FM",           color: "#d4956a" },
-  cm:  { label: "CM",           color: "#7ecf7e" },
-  nm:  { label: "NM",           color: "#7ab8e0" },
-  mod: { label: "Mod",          color: "#f08080" },
+  gm: { label: "GM", color: "#f0c040" },
+  im: { label: "IM", color: "#aaaaaa" },
+  fm: { label: "FM", color: "#d4956a" },
+  cm: { label: "CM", color: "#7ecf7e" },
+  nm: { label: "NM", color: "#7ab8e0" },
+  mod: { label: "Mod", color: "#f08080" },
 };
 
 const titleCache = {};
@@ -306,7 +306,7 @@ const sounds = {
 };
 
 function playSound(name) {
-  if(!settings.sound) return;
+  if (!settings.sound) return;
 
   const s = sounds[name];
   if (!s) return;
@@ -338,8 +338,28 @@ waitForFirebase(() => {
           const username = snap.val() || user.email;
           window.myUid = user.uid;
           window.myUsername = username;
-          console.log("👤 Username:", username);
-          joinQueue(user.uid, username);
+
+          // ✅ Check for existing game first
+          get(ref(window.firebaseDb, `users/${user.uid}/currentGame`)).then(gameSnap => {
+            if (gameSnap.exists()) {
+              const gameId = gameSnap.val();
+
+              // Determine color from the game record
+              get(ref(window.firebaseDb, `games/${gameId}`)).then(gSnap => {
+                const gameData = gSnap.val();
+                if (!gameData || gameData.status !== "playing") {
+                  // Game is over, join queue normally
+                  joinQueue(user.uid, username);
+                  return;
+                }
+                const color = gameData.white?.uid === user.uid ? "white" : "black";
+                console.log("🔄 Rejoining existing game:", gameId);
+                startGame(gameId, color); // ← skip queue entirely
+              });
+            } else {
+              joinQueue(user.uid, username); // no game, queue as normal
+            }
+          });
         });
       });
   });
