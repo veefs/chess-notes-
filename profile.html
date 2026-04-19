@@ -228,6 +228,45 @@
     });
   }
 
+  function renderProfile({ username, rating, wins, losses, draws, title }) {
+  document.getElementById("usernameEl").textContent = username;
+  document.getElementById("ratingEl").textContent = rating ?? "—";
+
+  const avatarEl = document.getElementById("avatarEl");
+  avatarEl.textContent = username?.[0]?.toUpperCase() || "?";
+
+  // stats
+  const total = (wins || 0) + (losses || 0) + (draws || 0);
+  const winRate = total ? Math.round(((wins || 0) / total) * 100) : 0;
+
+  document.getElementById("statGames").textContent = total;
+  document.getElementById("statWins").textContent = wins ?? 0;
+  document.getElementById("statLosses").textContent = losses ?? 0;
+  document.getElementById("statDraws").textContent = draws ?? 0;
+  document.getElementById("statWinRate").textContent = total ? `${winRate}%` : "—";
+
+  // title badge
+  const titleEl = document.getElementById("titleEl");
+
+  const TITLE_MAP = {
+    dev: { label: "DEV", class: "title-dev" },
+    gm: { label: "GM", class: "title-gm" },
+    im: { label: "IM", class: "title-im" },
+    fm: { label: "FM", class: "title-fm" },
+    cm: { label: "CM", class: "title-cm" },
+    nm: { label: "NM", class: "title-nm" },
+    mod: { label: "MOD", class: "title-mod" },
+  };
+
+  if (title && TITLE_MAP[title]) {
+    const t = TITLE_MAP[title];
+    titleEl.innerHTML = `<span class="title-badge ${t.class}">${t.label}</span>`;
+  } else {
+    titleEl.innerHTML = "";
+  }
+}
+
+
   onAuthStateChanged(auth, async user => {
     if (!user) { window.location.href = "login.html"; return; }
 
