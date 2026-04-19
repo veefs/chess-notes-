@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FaithChess — Profile</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .profile-wrap { max-width: 960px; margin: 40px auto; padding: 0 24px; display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
+  .profile-card { background: linear-gradient(145deg, var(--bg2), var(--bg3)); border: 1px solid var(--border); border-radius: 12px; padding: 28px 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; position: sticky; top: 24px; overflow: hidden; }
+  .avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; color: #fff; }
+  .profile-username { font-size: 22px; font-weight: 700; color: var(--text2); }
+  .rating-badge { background: var(--bg4); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 18px; font-weight: 700; color: var(--accent); }
+  .profile-rating { font-size: 13px; color: var(--muted); }
+  .profile-stats { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .stat-row { display: flex; justify-content: space-between; padding: 8px 12px; background: var(--bg4); border-radius: 8px; font-size: 13px; color: var(--muted); }
+  .stat-row b { color: var(--text2); font-weight: 600; }
+  .stat-win { color: #4caf7d; } .stat-loss { color: #e05c5c; } .stat-draw { color: var(--muted); }
+  .friends-section { width: 100%; margin-top: 8px; }
+  .section-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .friend-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: opacity .15s; }
+  .friend-item:hover { opacity: .7; }
+  .friend-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--accent2), var(--accent3)); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .friend-name { font-size: 13px; font-weight: 600; color: var(--text2); }
+  .friend-rating { font-size: 11px; color: var(--muted); }
+  .add-friend-wrap { display: flex; gap: 8px; margin-top: 12px; width: 100%; box-sizing: border-box; }
+  .add-friend-input { min-width: 0; flex: 1; padding: 7px 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text2); font-family: 'Outfit', sans-serif; font-size: 13px; outline: none; }
+  .add-friend-input:focus { border-color: var(--accent); }
+  .add-friend-btn { padding: 7px 12px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .2s; }
+  .add-friend-btn:hover { opacity: .8; }
+  .profile-right { display: flex; flex-direction: column; gap: 20px; }
+  .panel { background: linear-gradient(145deg, var(--bg2), var(--bg3)); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
+  .panel-header { font-size: 14px; font-weight: 700; color: var(--text2); margin-bottom: 16px; }
+  .game-list { display: flex; flex-direction: column; gap: 8px; }
+  .game-entry { display: grid; grid-template-columns: 48px 1fr auto auto; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg4); border-radius: 8px; font-size: 13px; border-left: 3px solid transparent; }
+  .game-entry.win  { border-left-color: #4caf7d; } .game-entry.loss { border-left-color: #e05c5c; } .game-entry.draw { border-left-color: var(--muted); }
+  .game-result { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+  .game-entry.win  .game-result { color: #4caf7d; } .game-entry.loss .game-result { color: #e05c5c; } .game-entry.draw .game-result { color: var(--muted); }
+  .game-opponent { color: var(--text2); font-weight: 600; } .game-meta { color: var(--muted); font-size: 11px; } .game-moves { color: var(--muted); font-size: 11px; text-align: right; }
+  .game-rating-change { font-size: 12px; font-weight: 600; text-align: right; min-width: 36px; }
+  .game-entry.win  .game-rating-change { color: #4caf7d; } .game-entry.loss .game-rating-change { color: #e05c5c; } .game-entry.draw .game-rating-change { color: var(--muted); }
+  .empty-state { text-align: center; color: var(--muted); font-size: 13px; padding: 24px 0; }
+  .loading-text { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+  @media (max-width: 700px) { .profile-wrap { grid-template-columns: 1fr; } .profile-card { position: static; } }
+</style>
+</head>
+<body>
+
+<header></header>
+
+<main>
+  <div class="profile-wrap">
+    <div class="profile-card">
+      <div class="avatar" id="avatarEl">?</div>
+      <div class="profile-username" id="usernameEl">Loading...</div>
+      <div class="rating-badge" id="ratingEl">—</div>
+      <div class="profile-rating">Rapid Rating</div>
+      <div class="profile-stats">
+        <div class="stat-row"><span>Games Played</span><b id="statGames">—</b></div>
+        <div class="stat-row"><span>Wins</span><b class="stat-win" id="statWins">—</b></div>
+        <div class="stat-row"><span>Losses</span><b class="stat-loss" id="statLosses">—</b></div>
+        <div class="stat-row"><span>Draws</span><b class="stat-draw" id="statDraws">—</b></div>
+        <div class="stat-row"><span>Win Rate</span><b id="statWinRate">—</b></div>
+      </div>
+      <div class="friends-section">
+        <div class="section-label">Friends</div>
+        <div id="friendsList"><div class="loading-text">Loading...</div></div>
+        <div class="add-friend-wrap">
+          <input class="add-friend-input" id="friendInput" placeholder="Username" maxlength="32" />
+          <button class="add-friend-btn" id="addFriendBtn">Add</button>
+        </div>
+        <div id="friendMsg" style="font-size:12px; margin-top:6px;"></div>
+      </div>
+    </div>
+    <div class="profile-right">
+      <div class="panel">
+        <div class="panel-header">♟ Game History</div>
+        <div class="game-list" id="gameList"><div class="loading-text">Loading games...</div></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>© 2026 FaithChess — Built for everyone</footer>
+
+<script src="nav.js"></script>
+
+<script type="module" src="auth.js"></script>
+
+</body>
+</html>

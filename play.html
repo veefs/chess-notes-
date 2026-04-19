@@ -1,75 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FaithChess Home</title>
-
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FaithChess — Play</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
 </head>
-
 <body>
 
-    <header>
-  <div class="logo">♟ FaithChess</div>
-  <div class="nav">
-    <div class="nav-item" onclick="window.location.href='index.html';">Home</div>
-    <div class="nav-item active" onclick="window.location.href='play.html';">Play</div>
-    <div class="nav-item" onclick="window.location.href='puzzles.html';">Puzzles</div>
-    <div class="nav-item" onclick="window.location.href='watch.html';">Watch</div>
-    <div class="nav-item" onclick="window.location.href='theory.html';">Theory</div>
-  </div>
+<header></header>
 
-  <!-- Settings cog pushed to far right -->
-  <div class="nav-spacer"></div>
-  <span id="navUsername" class="nav-username hidden"></span> 
-  <div class="settings-wrap">
-    <button class="cog-btn" id="cogBtn" aria-label="Settings">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-    </button>
-
-    <div class="cog-dropdown hidden" id="cogDropdown">
-      <div class="cog-item" onclick="window.location.href='login.html';">Log In</div>
-      <div class="cog-item" onclick="window.location.href='signup.html';">Sign Up</div>
+<main>
+  <section class="section" style="margin-left: 52rem; margin-top: 10rem;">
+    <div class="board-wrap">
+      <div class="player-bar top" id="black-bar">⚫ Black</div>
+      <div id="board"></div>
+      <div class="player-bar bottom" id="white-bar">⚪ White</div>
     </div>
-  </div>
-</header>
+  </section>
+</main>
 
-    <main>
+<footer>© 2026 FaithChess — Built for everyone</footer>
 
+<script src="nav.js"></script>
 
-        <section class="section" style="margin-left: 52rem; margin-top: 10rem;">
-            <div class="board-wrap">
-
-                <div class="player-bar top" id="black-bar">
-                    ⚫ Black
-                </div>
-
-                <div id="board"></div>
-
-                <div class="player-bar bottom" id="white-bar">
-                    ⚪ White
-                </div>
-
-            </div>
-        </section>
-        
-
-    </main>
-
-    <footer>
-        © 2026 FaithChess — Built for everyone
-    </footer>
-
-    <!-- dependencies FIRST -->
-    <script type="module">
+<script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -99,24 +56,16 @@
   onAuthStateChanged(auth, async user => {
     const dropdown = document.getElementById("cogDropdown");
     const navUser = document.getElementById("navUsername");
-
     if (user) {
       const snap = await get(ref(db, `users/${user.uid}/username`));
       const username = snap.val() || user.email;
-
-      if (navUser) {
-        navUser.textContent = username;
-        navUser.classList.remove("hidden");
-      }
-
+      if (navUser) { navUser.textContent = username; navUser.classList.remove("hidden"); }
       dropdown.innerHTML = `
         <div class="cog-item cog-user">👤 ${username}</div>
         <div class="cog-divider"></div>
         <div class="cog-item" id="signOutBtn">Sign Out</div>
       `;
-      document.getElementById("signOutBtn").onclick = () => {
-        signOut(auth).then(() => location.reload());
-      };
+      document.getElementById("signOutBtn").onclick = () => signOut(auth).then(() => location.reload());
     } else {
       if (navUser) navUser.classList.add("hidden");
       dropdown.innerHTML = `
@@ -127,15 +76,10 @@
   });
 </script>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
-
-    <script src="play.js"></script>
-<script src="settings.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+<script src="play.js"></script>
 
 </body>
-
 </html>

@@ -1,98 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FaithChess — Sign Up</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FaithChess — Sign Up</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
-    <header>
-        <div class="logo" onclick="window.location.href='index.html'" style="cursor:pointer;">♟ FaithChess</div>
-    </header>
+<header></header>
 
-    <main>
-        <div class="auth-wrap">
-            <div class="auth-box">
-                <h2 class="auth-title">Create account</h2>
-                <p class="auth-sub">Join FaithChess and start playing</p>
+<main>
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <h2 class="auth-title">Create account</h2>
+      <p class="auth-sub">Join FaithChess and start playing</p>
+      <div class="auth-field">
+        <label>Username</label>
+        <input type="text" id="usernameInput" placeholder="your username" maxlength="24" />
+      </div>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="emailInput" placeholder="you@example.com" />
+      </div>
+      <div class="auth-field">
+        <label>Password</label>
+        <input type="password" id="passwordInput" placeholder="min. 6 characters" />
+      </div>
+      <div id="authError" class="auth-error hidden"></div>
+      <button class="auth-btn" id="signupBtn">Create Account</button>
+      <p class="auth-switch">Already have an account? <a href="login.html">Log In</a></p>
+    </div>
+  </div>
+</main>
 
-                <div class="auth-field">
-                    <label>Email</label>
-                    <input type="email" id="emailInput" placeholder="you@example.com" />
-                </div>
+<script src="nav.js"></script>
 
-                <div class="auth-field">
-                    <label>Username</label>
-                    <input type="text" id="usernameInput" placeholder="your username" />
-                </div>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-                <div class="auth-field">
-                    <label>Password</label>
-                    <input type="password" id="passwordInput" placeholder="min. 6 characters" />
-                </div>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAUdXVlmN9xhhIzubK0MTtGO3hA9JkHClA",
+    authDomain: "faithchess.firebaseapp.com",
+    databaseURL: "https://faithchess-default-rtdb.firebaseio.com",
+    projectId: "faithchess",
+    storageBucket: "faithchess.firebasestorage.app",
+    messagingSenderId: "132292001988",
+    appId: "1:132292001988:web:3c9b7227f1b09766b48991"
+  };
 
-                
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getDatabase(app);
 
-                <div id="authError" class="auth-error hidden"></div>
+  document.getElementById("signupBtn").onclick = async () => {
+    const username = document.getElementById("usernameInput").value.trim();
+    const email = document.getElementById("emailInput").value.trim();
+    const password = document.getElementById("passwordInput").value;
+    const errEl = document.getElementById("authError");
 
-                <button class="auth-btn" id="signupBtn">Create Account</button>
+    errEl.classList.add("hidden");
+    errEl.textContent = "";
 
-                <p class="auth-switch">Already have an account? <a href="login.html">Log In</a></p>
-            </div>
-        </div>
-    </main>
+    if (!username) { errEl.textContent = "Please enter a username."; errEl.classList.remove("hidden"); return; }
+    if (username.length < 3) { errEl.textContent = "Username must be at least 3 characters."; errEl.classList.remove("hidden"); return; }
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    const usernameSnap = await get(ref(db, `usernames/${username.toLowerCase()}`));
+    if (usernameSnap.exists()) { errEl.textContent = "Username already taken."; errEl.classList.remove("hidden"); return; }
 
-const app = initializeApp({
-  apiKey: "AIzaSyAUdXVlmN9xhhIzubK0MTtGO3hA9JkHClA",
-  authDomain: "faithchess.firebaseapp.com",
-  databaseURL: "https://faithchess-default-rtdb.firebaseio.com",
-  projectId: "faithchess",
-  storageBucket: "faithchess.firebasestorage.app",
-  messagingSenderId: "132292001988",
-  appId: "1:132292001988:web:3c9b7227f1b09766b48991"
-});const auth = getAuth(app);
-const db = getDatabase(app);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = cred.user.uid;
 
-document.getElementById("signupBtn").onclick = async () => {
-  const email = document.getElementById("emailInput").value.trim();
-  const password = document.getElementById("passwordInput").value;
-  const username = document.getElementById("usernameInput").value.trim();
-  const errEl = document.getElementById("authError");
+      await set(ref(db, `users/${uid}/username`), username);
+      await set(ref(db, `users/${uid}/email`), email);
+      await set(ref(db, `users/${uid}/rating`), 1200);
+      await set(ref(db, `users/${uid}/wins`), 0);
+      await set(ref(db, `users/${uid}/losses`), 0);
+      await set(ref(db, `users/${uid}/draws`), 0);
+      await set(ref(db, `users/${uid}/createdAt`), Date.now());
+      await set(ref(db, `usernames/${username.toLowerCase()}`), uid);
 
-  errEl.classList.add("hidden");
+      window.location.href = "index.html";
+    } catch (err) {
+      errEl.textContent = friendlyError(err.code);
+      errEl.classList.remove("hidden");
+    }
+  };
 
-  if (!username) {
-    errEl.textContent = "Please enter a username.";
-    errEl.classList.remove("hidden");
-    return;
+  function friendlyError(code) {
+    if (code === "auth/email-already-in-use") return "An account with that email already exists.";
+    if (code === "auth/invalid-email") return "Invalid email address.";
+    if (code === "auth/weak-password") return "Password must be at least 6 characters.";
+    return "Something went wrong. Please try again.";
   }
-
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    // Save username to DB under their UID
-    await set(ref(db, `users/${cred.user.uid}`), {
-      username,
-      email,
-      createdAt: Date.now(),
-    });
-    window.location.href = "index.html";
-  } catch (err) {
-    errEl.textContent = friendlyError(err.code);
-    errEl.classList.remove("hidden");
-  }
-};
-    </script>
+</script>
 
 </body>
-
 </html>

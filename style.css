@@ -13,6 +13,11 @@
   --radius: 8px;
 }
 
+body::-webkit-scrollbar {
+  display: none;
+   scrollbar-width: none;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -197,7 +202,7 @@ footer {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
-  max-width: 1200px;
+  max-width: 1100px;
   margin: auto;
 }
 
