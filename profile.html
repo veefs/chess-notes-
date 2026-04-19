@@ -134,7 +134,7 @@
 
   function renderProfile(data) {
     const username = data.username || "Unknown";
-    const rating = data.rating ?? 1200;
+    const rating = data.rating ?? 800;
     const wins = data.wins ?? 0;
     const losses = data.losses ?? 0;
     const draws = data.draws ?? 0;
@@ -192,7 +192,7 @@
         get(ref(db, `users/${fUid}/rating`)),
       ]);
       const fname = nameSnap.val() || "Unknown";
-      const fRating = ratingSnap.val() ?? 1200;
+      const fRating = ratingSnap.val() ?? 800;
       const item = document.createElement("div");
       item.className = "friend-item";
       item.innerHTML = `
