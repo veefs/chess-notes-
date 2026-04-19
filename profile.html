@@ -27,9 +27,10 @@
   .stat-win { color: #4caf7d; } .stat-loss { color: #e05c5c; } .stat-draw { color: var(--muted); }
   .friends-section { width: 100%; margin-top: 8px; }
   .section-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-  .friend-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .friend-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer; }
+  .friend-item:hover .friend-name { color: var(--accent); }
   .friend-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--accent2), var(--accent3)); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
-  .friend-name { font-size: 13px; font-weight: 600; color: var(--text2); }
+  .friend-name { font-size: 13px; font-weight: 600; color: var(--text2); transition: color .2s; }
   .friend-rating { font-size: 11px; color: var(--muted); }
   .add-friend-wrap { display: flex; gap: 8px; margin-top: 12px; width: 100%; box-sizing: border-box; }
   .add-friend-input { min-width: 0; flex: 1; padding: 7px 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text2); font-family: 'Outfit', sans-serif; font-size: 13px; outline: none; }
@@ -54,6 +55,53 @@
   .request-actions { display: flex; gap: 8px; }
   .btn-accept { padding: 4px 10px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; }
   .btn-decline { padding: 4px 10px; background: var(--bg4); color: var(--muted); border: none; border-radius: var(--radius); font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; }
+
+  /* ── Challenge button ── */
+  .challenge-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    width: 100%;
+    justify-content: center;
+    letter-spacing: .3px;
+  }
+  .challenge-btn:hover   { opacity: .88; }
+  .challenge-btn:active  { transform: scale(.97); }
+  .challenge-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+  /* ── Viewing-other banner ── */
+  .other-profile-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--bg4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    width: 100%;
+  }
+  .other-profile-banner a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: auto;
+    font-size: 12px;
+  }
+  .other-profile-banner a:hover { text-decoration: underline; }
+
   @media (max-width: 700px) { .profile-wrap { grid-template-columns: 1fr; } .profile-card { position: static; } }
 </style>
 </head>
@@ -69,6 +117,17 @@
       <div id="titleEl"></div>
       <div class="rating-badge" id="ratingEl">—</div>
       <div class="profile-rating">Rapid Rating</div>
+
+      <!-- Challenge button — only shown on other people's profiles -->
+      <button class="challenge-btn hidden" id="challengeBtn">
+        ⚔ Challenge
+      </button>
+      <!-- Back to own profile link — only on other profiles -->
+      <div class="other-profile-banner hidden" id="otherBanner">
+        <span>Viewing another player's profile</span>
+        <a href="profile.html">← My Profile</a>
+      </div>
+
       <div class="profile-stats">
         <div class="stat-row"><span>Games Played</span><b id="statGames">—</b></div>
         <div class="stat-row"><span>Wins</span><b class="stat-win" id="statWins">—</b></div>
@@ -76,7 +135,9 @@
         <div class="stat-row"><span>Draws</span><b class="stat-draw" id="statDraws">—</b></div>
         <div class="stat-row"><span>Win Rate</span><b id="statWinRate">—</b></div>
       </div>
-      <div class="friends-section">
+
+      <!-- Friends section only shown on own profile -->
+      <div class="friends-section" id="friendsSection">
         <div class="section-label">Friends</div>
         <div id="friendsList"><div class="loading-text">Loading...</div></div>
         <div class="add-friend-wrap">
@@ -86,6 +147,7 @@
         <div id="friendMsg" style="font-size:12px; margin-top:6px;"></div>
       </div>
     </div>
+
     <div class="profile-right">
       <div class="panel">
         <div class="panel-header">♟ Game History</div>
@@ -100,6 +162,7 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="nav.js"></script>
 <script type="module" src="auth.js"></script>
+<script type="module" src="challenges.js"></script>
 
 <script type="module">
   import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -116,61 +179,136 @@
     appId: "1:132292001988:web:3c9b7227f1b09766b48991"
   };
 
-  // Reuse existing app if already initialized by auth.js
   const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-  const db = getDatabase(app);
+  const db  = getDatabase(app);
   const auth = getAuth(app);
+
+  // ── Figure out whose profile to show ──────────────────────────────────────
+  const params       = new URLSearchParams(window.location.search);
+  const viewUsername = params.get("user"); // null = own profile
+
+  const TITLES = {
+    dev: { label: "&lt;/&gt; Developer", cls: "title-dev" },
+    gm:  { label: "GM",  cls: "title-gm"  },
+    im:  { label: "IM",  cls: "title-im"  },
+    fm:  { label: "FM",  cls: "title-fm"  },
+    cm:  { label: "CM",  cls: "title-cm"  },
+    nm:  { label: "NM",  cls: "title-nm"  },
+    mod: { label: "Mod", cls: "title-mod" },
+  };
 
   onAuthStateChanged(auth, async user => {
     if (!user) { window.location.href = "login.html"; return; }
 
-    const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, friendsSnap, titleSnap] = await Promise.all([
-      get(ref(db, `users/${user.uid}/username`)),
-      get(ref(db, `users/${user.uid}/rating`)),
-      get(ref(db, `users/${user.uid}/wins`)),
-      get(ref(db, `users/${user.uid}/losses`)),
-      get(ref(db, `users/${user.uid}/draws`)),
-      get(ref(db, `users/${user.uid}/friends`)),
-      get(ref(db, `users/${user.uid}/title`)),
-    ]);
+    if (viewUsername) {
+      // ── Viewing someone else's profile ─────────────────────────────────
+      document.getElementById("otherBanner").classList.remove("hidden");
+      document.getElementById("friendsSection").style.display = "none";
 
-    const username = usernameSnap.val();
-    const data = {
-      username,
-      rating: ratingSnap.val(),
-      wins: winsSnap.val(),
-      losses: lossesSnap.val(),
-      draws: drawsSnap.val(),
-      friends: friendsSnap.val() || {},
-      title: titleSnap.val() || null,
-    };
+      // Lookup uid from username index
+      const uidSnap = await get(ref(db, `usernames/${viewUsername.toLowerCase()}`));
+      if (!uidSnap.exists()) {
+        document.getElementById("usernameEl").textContent = "User not found";
+        document.getElementById("gameList").innerHTML =
+          `<div class="empty-state">This user doesn't exist.</div>`;
+        return;
+      }
 
-    renderProfile(data);
-    loadGameHistory(user.uid);
-    loadFriends(user.uid, data.friends);
-    setupAddFriend(user.uid, username);
+      const targetUid = uidSnap.val();
+      const isOwnProfile = targetUid === user.uid;
+
+      if (isOwnProfile) {
+        // Redirect to clean profile URL
+        window.location.href = "profile.html";
+        return;
+      }
+
+      // Load target's data
+      const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, titleSnap, myUsernameSnap] =
+        await Promise.all([
+          get(ref(db, `users/${targetUid}/username`)),
+          get(ref(db, `users/${targetUid}/rating`)),
+          get(ref(db, `users/${targetUid}/wins`)),
+          get(ref(db, `users/${targetUid}/losses`)),
+          get(ref(db, `users/${targetUid}/draws`)),
+          get(ref(db, `users/${targetUid}/title`)),
+          get(ref(db, `users/${user.uid}/username`)),
+        ]);
+
+      const targetUsername = usernameSnap.val() || viewUsername;
+      const myUsername     = myUsernameSnap.val() || user.email;
+
+      renderProfile({
+        username: targetUsername,
+        rating:   ratingSnap.val(),
+        wins:     winsSnap.val(),
+        losses:   lossesSnap.val(),
+        draws:    drawsSnap.val(),
+        title:    titleSnap.val(),
+      });
+
+      loadGameHistory(targetUid);
+
+      // Show challenge button
+      const btn = document.getElementById("challengeBtn");
+      btn.classList.remove("hidden");
+      btn.onclick = async () => {
+        btn.disabled = true;
+        btn.textContent = "⏳ Sending...";
+        // sendChallenge is exposed by challenges.js on window
+        await window.sendChallenge(targetUid, targetUsername);
+        btn.textContent = "✓ Challenge Sent";
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.textContent = "⚔ Challenge";
+        }, 3000);
+      };
+
+    } else {
+      // ── Own profile ─────────────────────────────────────────────────────
+      const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, friendsSnap, titleSnap] =
+        await Promise.all([
+          get(ref(db, `users/${user.uid}/username`)),
+          get(ref(db, `users/${user.uid}/rating`)),
+          get(ref(db, `users/${user.uid}/wins`)),
+          get(ref(db, `users/${user.uid}/losses`)),
+          get(ref(db, `users/${user.uid}/draws`)),
+          get(ref(db, `users/${user.uid}/friends`)),
+          get(ref(db, `users/${user.uid}/title`)),
+        ]);
+
+      const username = usernameSnap.val();
+      const data = {
+        username,
+        rating:  ratingSnap.val(),
+        wins:    winsSnap.val(),
+        losses:  lossesSnap.val(),
+        draws:   drawsSnap.val(),
+        friends: friendsSnap.val() || {},
+        title:   titleSnap.val() || null,
+      };
+
+      renderProfile(data);
+      loadGameHistory(user.uid);
+      loadFriends(user.uid, data.friends);
+      setupAddFriend(user.uid, username);
+    }
   });
 
-  const TITLES = {
-    dev: { label: "&lt;/&gt; Developer", cls: "title-dev" },
-    gm:  { label: "GM",        cls: "title-gm"  },
-    im:  { label: "IM",        cls: "title-im"  },
-    fm:  { label: "FM",        cls: "title-fm"  },
-    cm:  { label: "CM",        cls: "title-cm"  },
-    nm:  { label: "NM",        cls: "title-nm"  },
-    mod: { label: "Mod",       cls: "title-mod" },
-  };
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   function renderProfile(data) {
     const username = data.username || "Unknown";
-    const rating = data.rating ?? 800;
-    const wins = data.wins ?? 0;
-    const losses = data.losses ?? 0;
-    const draws = data.draws ?? 0;
-    const total = wins + losses + draws;
-    const winRate = total > 0 ? Math.round((wins / total) * 100) + "%" : "—";
-    document.getElementById("avatarEl").textContent = username[0].toUpperCase();
+    const rating   = data.rating ?? 800;
+    const wins     = data.wins   ?? 0;
+    const losses   = data.losses ?? 0;
+    const draws    = data.draws  ?? 0;
+    const total    = wins + losses + draws;
+    const winRate  = total > 0 ? Math.round((wins / total) * 100) + "%" : "—";
+
+    document.getElementById("avatarEl").textContent   = username[0].toUpperCase();
     document.getElementById("usernameEl").textContent = username;
+    document.title = `FaithChess — ${username}`;
+
     const titleEl = document.getElementById("titleEl");
     if (data.title && TITLES[data.title]) {
       const t = TITLES[data.title];
@@ -178,17 +316,18 @@
     } else {
       titleEl.innerHTML = "";
     }
-    document.getElementById("ratingEl").textContent = rating;
-    document.getElementById("statGames").textContent = total;
-    document.getElementById("statWins").textContent = wins;
-    document.getElementById("statLosses").textContent = losses;
-    document.getElementById("statDraws").textContent = draws;
+
+    document.getElementById("ratingEl").textContent    = rating;
+    document.getElementById("statGames").textContent   = total;
+    document.getElementById("statWins").textContent    = wins;
+    document.getElementById("statLosses").textContent  = losses;
+    document.getElementById("statDraws").textContent   = draws;
     document.getElementById("statWinRate").textContent = winRate;
   }
 
   async function loadGameHistory(uid) {
     const listEl = document.getElementById("gameList");
-    const snap = await get(ref(db, `users/${uid}/gameHistory`));
+    const snap   = await get(ref(db, `users/${uid}/gameHistory`));
     const history = snap.val();
     if (!history) {
       listEl.innerHTML = `<div class="empty-state">No games yet. <a href="play.html" style="color:var(--accent)">Play now →</a></div>`;
@@ -197,7 +336,7 @@
     const games = Object.values(history).reverse();
     listEl.innerHTML = "";
     for (const g of games) {
-      const result = g.result;
+      const result       = g.result;
       const ratingChange = g.ratingChange ?? 0;
       const entry = document.createElement("div");
       entry.className = `game-entry ${result}`;
@@ -218,7 +357,7 @@
     const listEl = document.getElementById("friendsList");
     listEl.innerHTML = "";
 
-    const reqSnap = await get(ref(db, `users/${uid}/friendRequests`));
+    const reqSnap  = await get(ref(db, `users/${uid}/friendRequests`));
     const requests = reqSnap.val() || {};
 
     for (const [fromUid, data] of Object.entries(requests)) {
@@ -257,10 +396,11 @@
         get(ref(db, `users/${fUid}/username`)),
         get(ref(db, `users/${fUid}/rating`)),
       ]);
-      const fname = nameSnap.val() || "Unknown";
+      const fname   = nameSnap.val() || "Unknown";
       const fRating = ratingSnap.val() ?? 800;
       const item = document.createElement("div");
       item.className = "friend-item";
+      item.title = `View ${fname}'s profile`;
       item.innerHTML = `
         <div class="friend-avatar">${fname[0].toUpperCase()}</div>
         <div>
@@ -268,16 +408,18 @@
           <div class="friend-rating">${fRating}</div>
         </div>
       `;
+      // Clicking a friend goes to their profile
+      item.onclick = () => { window.location.href = `profile.html?user=${encodeURIComponent(fname)}`; };
       listEl.appendChild(item);
     }
   }
 
   function setupAddFriend(myUid, myUsername) {
     document.getElementById("addFriendBtn").onclick = async () => {
-      const input = document.getElementById("friendInput");
-      const msgEl = document.getElementById("friendMsg");
+      const input         = document.getElementById("friendInput");
+      const msgEl         = document.getElementById("friendMsg");
       const targetUsername = input.value.trim();
-      msgEl.textContent = "";
+      msgEl.textContent   = "";
       if (!targetUsername) return;
 
       const snap = await get(ref(db, `usernames/${targetUsername.toLowerCase()}`));
