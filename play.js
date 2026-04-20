@@ -441,6 +441,10 @@ document.getElementById("goHome").onclick = () => {
   window.location.href = "index.html";
 };
 
+document.getElementById("goArena").onclick = () => {
+  window.location.href = `arena.html`;
+};
+
 // =======================
 // PLAYER BARS
 // =======================
@@ -561,9 +565,41 @@ async function saveGameResult(data, result) {
       playedAt: Date.now(),
       ratingChange,
       gameId: currentGameId,
+      gameId:      currentGameId,
+      result,
+      opponentUsername,
+      myColor,
+      moveCount:   game.history().length,
+      playedAt:    Date.now(),
+      ratingChange,
       timeControl: data.timeControl || selectedTc || "rapid",
     }),
   ]);
+
+  if (currentTournamentId) await saveTournamentResult(result);
+}
+
+// =======================
+// SAVE TOURNAMENT RESULT
+// =======================
+async function saveTournamentResult(result) {
+  const { ref, runTransaction } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const myUid = window.myUid;
+  if (!myUid || !currentTournamentId) return;
+
+  const scoreGain = result === "win" ? 2 : result === "draw" ? 1 : 0;
+
+  await runTransaction(ref(window.firebaseDb, `tournaments/${currentTournamentId}/players/${myUid}`), player => {
+    if (!player) return player;
+    return {
+      ...player,
+      score:       (player.score       || 0) + scoreGain,
+      wins:        (player.wins        || 0) + (result === "win"  ? 1 : 0),
+      draws:       (player.draws       || 0) + (result === "draw" ? 1 : 0),
+      losses:      (player.losses      || 0) + (result === "loss" ? 1 : 0),
+      gamesPlayed: (player.gamesPlayed || 0) + 1,
+    };
+  });
 }
 
 // =======================
@@ -769,6 +805,18 @@ waitForFirebase(() => {
           const params = new URLSearchParams(window.location.search);
           const challengeId = params.get("challenge");
           const colorParam = params.get("color");
+          const params        = new URLSearchParams(window.location.search);
+          const challengeId   = params.get("challenge");
+          const colorParam    = params.get("color");
+          currentTournamentId = params.get("tournament") || null;
+
+          if (currentTournamentId) {
+            window.history.replaceState({}, "", "play.html");
+            const goArenaBtn = document.getElementById("goArena");
+            const goAgainBtn = document.getElementById("goPlayAgain");
+            if (goArenaBtn) goArenaBtn.classList.remove("hidden");
+            if (goAgainBtn) goAgainBtn.classList.add("hidden");
+          }
 
           if (challengeId && colorParam) {
             window.history.replaceState({}, "", "play.html");

@@ -5615,7 +5615,7 @@ function renderBlocksList(wrap){
   edEntry.blocks.forEach((block,i)=>{ wrap.appendChild(buildBlockItem(block,i,edEntry.blocks,()=>renderBlocksList(wrap))); });
 }
 
-function buildBlockItem(block, i, blockArr, refresh, _depth){
+function buildBlockItem(block, i, blockArr, refresh, _depth, _parentMoves){
   const depth = _depth || 0;
   const item=el('div','bitem');
 
@@ -5704,11 +5704,11 @@ function buildBlockItem(block, i, blockArr, refresh, _depth){
     pIn.oninput=e=>{block.popularity=e.target.value;};
     body.appendChild(pIn);
 
-    body.appendChild(buildMovesEditor(block));
+    body.appendChild(buildMovesEditor(block, _parentMoves || []));
   }
 
   else if(block.type==='tabs'){
-    body.appendChild(buildTabsEditor(block,()=>{preview.textContent='Tabs: '+(block.tabs||[]).map(t=>t.label).join(', ');},depth));
+    body.appendChild(buildTabsEditor(block,()=>{preview.textContent='Tabs: '+(block.tabs||[]).map(t=>t.label).join(', ');},depth,_parentMoves||[]));
   }
 
   item.appendChild(body);
@@ -5716,7 +5716,7 @@ function buildBlockItem(block, i, blockArr, refresh, _depth){
 }
 
 // ─── Moves editor ─────────────────────────────────────────────────────
-function buildMovesEditor(block){
+function buildMovesEditor(block, parentMoves){
   if(!block.moves) block.moves=[];
   const wrap=el('div','');
   wrap.style.cssText='display:flex;flex-direction:column;gap:8px;';
@@ -5731,6 +5731,25 @@ function buildMovesEditor(block){
   sanBox.placeholder='e4 c6 d4 d5 exd5 cxd5 c4 Nf6';
   sanBox.style.cssText='font-size:12px;letter-spacing:.03em;';
   lineRow.appendChild(sanBox);
+
+  if(parentMoves && parentMoves.length > 0){
+    const inheritBtn = el('button','ed-board-btn');
+    inheritBtn.textContent = '⬆ Inherit';
+    inheritBtn.title = 'Prepend moves from the previous tab';
+    inheritBtn.style.cssText = 'flex-shrink:0;font-size:11px;padding:5px 10px;white-space:nowrap;';
+    inheritBtn.onclick = () => {
+      const parentSan  = parentMoves.map(m => m.san).filter(Boolean).join(' ');
+      const currentSan = sanBox.value.trim();
+      // Only prepend if current doesn't already start with parent moves
+      const newVal = currentSan.startsWith(parentSan)
+        ? currentSan
+        : (parentSan + (currentSan ? ' ' + currentSan : ''));
+      sanBox.value = newVal;
+      sanBox.dispatchEvent(new Event('input'));
+      sanBox.focus();
+    };
+    lineRow.appendChild(inheritBtn);
+  }
   const engineBox=el('div','engine-line-box');
   const engineLabel=el('div','engine-line-label'); engineLabel.textContent='Engine line';
   const engineValue=el('div','engine-line-value empty'); engineValue.textContent='Waiting for a valid position.';
@@ -5788,7 +5807,7 @@ function buildMovesEditor(block){
 }
 
 // ─── Tabs editor ─────────────────────────────────────────────────────
-function buildTabsEditor(block, onchange, _depth){
+function buildTabsEditor(block, onchange, _depth, _parentMoves){
   if(!block.tabs) block.tabs=[];
   const depth = _depth || 0;
   const wrap=el('div',''); wrap.style.cssText=`display:flex;flex-direction:column;gap:4px;`;
@@ -5822,7 +5841,16 @@ function buildTabsEditor(block, onchange, _depth){
       // Nested blocks inside this tab
       if(!tab.blocks) tab.blocks=[];
       const nestedWrap=el('div','blocks-list'); nestedWrap.style.marginBottom='4px';
-      function refreshNested(){ nestedWrap.innerHTML=''; tab.blocks.forEach((b,bi)=>nestedWrap.appendChild(buildBlockItem(b,bi,tab.blocks,refreshNested,depth+1))); }
+      function refreshNested(){
+        nestedWrap.innerHTML='';
+        const thisTabLineMoves = (tab.blocks||[]).find(b=>b.type==='line')?.moves || [];
+        // If this tab has its own line, use it as context for nested tabs; otherwise pass the ancestor context down.
+        const contextForChildren = thisTabLineMoves.length ? thisTabLineMoves : (_parentMoves||[]);
+        tab.blocks.forEach((b,bi)=>{
+          const movesToPass = b.type==='tabs' ? contextForChildren : (_parentMoves||[]);
+          nestedWrap.appendChild(buildBlockItem(b,bi,tab.blocks,refreshNested,depth+1,movesToPass));
+        });
+      }
       refreshNested();
       tBody.appendChild(nestedWrap);
 
