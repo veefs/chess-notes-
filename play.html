@@ -7,26 +7,386 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+<style>
+  main { padding: 0; }
+
+  .play-wrap {
+    display: flex;
+    align-items: stretch;
+    min-height: calc(103.85vh - 64px - 49px);
+  }
+
+  /* ── Board side ── */
+  .board-side {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-top: 1rem;
+  }
+
+  .player-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: linear-gradient(145deg, var(--bg2), var(--bg3));
+    border: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--text2);
+    width: 100%;
+    max-width: 960px;
+    box-sizing: border-box;
+  }
+
+  .bar-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+
+  .bar-name   { font-size: 14px; font-weight: 700; color: var(--text2); }
+  .bar-rating { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .bar-title  { font-size: 11px; font-weight: 700; letter-spacing: .5px; }
+  .bar-you    { font-size: 11px; color: var(--muted); }
+
+  .bar-timer {
+    margin-left: auto;
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text2);
+    background: var(--bg4);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 20px;
+    min-width: 100px;
+    text-align: center;
+    transition: color .3s, background .3s;
+    letter-spacing: 1px;
+  }
+
+  .bar-timer.low    { color: #e05c5c; background: rgba(224,92,92,.12); border-color: rgba(224,92,92,.3); }
+  .bar-timer.active { color: var(--accent); border-color: var(--accent); }
+
+  #board { width: 960px !important; max-width: 960px; }
+
+  /* ── Right panel ── */
+  .right-panel {
+    width: 340px;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, var(--bg2), var(--bg3));
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 28px 20px;
+    gap: 8px;
+    overflow-y: auto;
+  }
+
+  .panel-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .panel-heading-icon { font-size: 28px; }
+
+  .panel-heading-text {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text2);
+  }
+
+  .tc-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, transform .1s;
+    text-align: left;
+    width: 100%;
+    font-family: 'Outfit', sans-serif;
+    color: var(--text2);
+    position: relative;
+  }
+
+  .tc-btn:hover {
+    background: var(--bg4);
+    border-color: var(--accent);
+    transform: translateX(2px);
+  }
+
+  .tc-btn.selected {
+    border-color: var(--accent);
+    background: rgba(165,148,192,.1);
+  }
+
+  .tc-btn.queuing {
+    border-color: #4caf7d;
+    background: rgba(76,175,125,.08);
+  }
+
+  .tc-check {
+    margin-left: auto;
+    font-size: 16px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity .15s;
+  }
+
+  .tc-btn.selected .tc-check { opacity: 1; }
+
+  .tc-icon-wrap {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+
+  .tc-icon-wrap.bullet { background: rgba(224,92,92,.15); }
+  .tc-icon-wrap.blitz  { background: rgba(240,192,64,.15); }
+  .tc-icon-wrap.rapid  { background: rgba(76,175,125,.15); }
+
+  .tc-info { display: flex; flex-direction: column; gap: 2px; }
+
+  .tc-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text2);
+  }
+
+  .tc-desc {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .panel-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 0;
+  }
+
+  /* ── Play button ── */
+  .play-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    letter-spacing: .3px;
+    display: none;
+  }
+
+  .play-btn:hover  { opacity: .88; }
+  .play-btn:active { transform: scale(.98); }
+  .play-btn.visible { display: block; }
+
+  .cancel-btn {
+    width: 100%;
+    padding: 10px;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color .2s, border-color .2s;
+    display: none;
+  }
+
+  .cancel-btn:hover { color: #e05c5c; border-color: #e05c5c; }
+  .cancel-btn.visible { display: block; }
+
+  .queue-status {
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    padding: 10px 8px;
+    border-radius: 8px;
+    background: var(--bg4);
+    border: 1px solid var(--border);
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .queue-status.searching {
+    color: #4caf7d;
+    border-color: rgba(76,175,125,.3);
+    background: rgba(76,175,125,.06);
+    animation: pulse-text 1.5s infinite;
+  }
+
+  @keyframes pulse-text {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: .4; }
+  }
+
+  /* ── Game over overlay ── */
+  .gameover-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.65);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 999;
+    backdrop-filter: blur(4px);
+  }
+
+  .gameover-overlay.hidden { display: none; }
+
+  .gameover-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 40px;
+    text-align: center;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 24px 64px rgba(0,0,0,.6);
+  }
+
+  .gameover-icon  { font-size: 48px; }
+  .gameover-title { font-size: 26px; font-weight: 700; }
+  .gameover-sub   { font-size: 14px; color: var(--muted); }
+
+  .gameover-rating { font-size: 20px; font-weight: 700; }
+  .gameover-rating.win  { color: #4caf7d; }
+  .gameover-rating.loss { color: #e05c5c; }
+  .gameover-rating.draw { color: var(--muted); }
+
+  .gameover-actions { display: flex; gap: 10px; justify-content: center; margin-top: 4px; }
+
+  .go-btn {
+    padding: 11px 24px;
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'Outfit', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+
+  .go-btn:hover     { opacity: .85; }
+  .go-btn.primary   { background: var(--accent); color: #fff; }
+  .go-btn.secondary { background: var(--bg4); color: var(--text2); border: 1px solid var(--border); }
+</style>
 </head>
 <body>
 
 <header></header>
 
-<main>
-  <section class="section" style="margin-left: 52rem; margin-top: 10rem;">
-    <div class="board-wrap">
-      <div class="player-bar top" id="black-bar">Opponent</div>
-      <div id="board"></div>
-      <div class="player-bar bottom" id="white-bar">You</div>
+<div id="gameoverOverlay" class="gameover-overlay hidden">
+  <div class="gameover-box">
+    <div class="gameover-icon"   id="goIcon">♟</div>
+    <div class="gameover-title"  id="goTitle">Game Over</div>
+    <div class="gameover-sub"    id="goSub"></div>
+    <div class="gameover-rating hidden" id="goRating"></div>
+    <div class="gameover-actions">
+      <button class="go-btn primary"   id="goPlayAgain">Play Again</button>
+      <button class="go-btn secondary" id="goHome">Home</button>
     </div>
-  </section>
-</main>
+  </div>
+</div>
 
-<footer>© 2026 FaithChess — Built for everyone</footer>
+<main>
+  <div class="play-wrap">
+
+    <!-- Board -->
+    <div class="board-side">
+      <div class="player-bar top" id="black-bar">
+        <div class="bar-avatar" id="blackAvatar">?</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="bar-name"   id="blackName">Opponent</span>
+            <span class="bar-rating" id="blackRating"></span>
+          </div>
+        </div>
+        <div class="bar-timer" id="blackTimer">—:——</div>
+      </div>
+
+      <div id="board"></div>
+
+      <div class="player-bar bottom" id="white-bar">
+        <div class="bar-avatar" id="whiteAvatar">?</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="bar-name"   id="whiteName">You</span>
+            <span class="bar-rating" id="whiteRating"></span>
+          </div>
+        </div>
+        <div class="bar-timer" id="whiteTimer">—:——</div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="right-panel">
+      <div class="panel-heading">
+        <span class="panel-heading-icon">♟</span>
+        <span class="panel-heading-text">Play Chess</span>
+      </div>
+
+      <button class="tc-btn" id="tcBullet" data-tc="bullet">
+        <div class="tc-info">
+          <span class="tc-name">Bullet (1+0)</span>
+          <span class="tc-desc">1 minute per side</span>
+        </div>
+        <span class="tc-check">✓</span>
+      </button>
+
+      <button class="tc-btn" id="tcBlitz" data-tc="blitz">
+        <div class="tc-info">
+          <span class="tc-name">Blitz (5+0)</span>
+          <span class="tc-desc">5 minutes per side</span>
+        </div>
+        <span class="tc-check">✓</span>
+      </button>
+
+      <button class="tc-btn" id="tcRapid" data-tc="rapid">
+        <div class="tc-info">
+          <span class="tc-name">Rapid (10+0)</span>
+          <span class="tc-desc">10 minutes per side</span>
+        </div>
+        <span class="tc-check">✓</span>
+      </button>
+
+      <div class="panel-divider"></div>
+
+      <button class="play-btn" id="playBtn">Find Game</button>
+      <button class="cancel-btn" id="cancelBtn">Cancel Search</button>
+
+      <div class="queue-status" id="queueStatus">Select a time control to play</div>
+    </div>
+
+  </div>
+</main>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="nav.js"></script>
 <script type="module" src="auth.js"></script>
+<script type="module" src="challenges.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
 <script src="settings.js"></script>

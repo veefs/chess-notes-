@@ -26,12 +26,12 @@ window.firebaseOnAuthChanged = onAuthStateChanged;
 
 const NAV_TITLES = {
   dev: { label: "DEV", color: "#74ebcb" },
-  gm:  { label: "GM",        color: "#f0c040" },
-  im:  { label: "IM",        color: "#aaaaaa" },
-  fm:  { label: "FM",        color: "#d4956a" },
-  cm:  { label: "CM",        color: "#7ecf7e" },
-  nm:  { label: "NM",        color: "#7ab8e0" },
-  mod: { label: "Mod",       color: "#f08080" },
+  gm: { label: "GM", color: "#f0c040" },
+  im: { label: "IM", color: "#aaaaaa" },
+  fm: { label: "FM", color: "#d4956a" },
+  cm: { label: "CM", color: "#7ecf7e" },
+  nm: { label: "NM", color: "#7ab8e0" },
+  mod: { label: "Mod", color: "#f08080" },
 };
 
 onAuthStateChanged(auth, async user => {
@@ -43,6 +43,9 @@ onAuthStateChanged(auth, async user => {
       get(ref(db, `users/${user.uid}/title`)),
     ]);
     const username = usernameSnap.val() || user.email;
+    const avatarSnap = await get(ref(db, `users/${user.uid}/avatarUrl`));
+    const avatarUrl = avatarSnap.val();
+    window.myAvatarUrl = avatarUrl;
     const titleKey = titleSnap.val();
     const titleInfo = titleKey ? NAV_TITLES[titleKey] : null;
     const titleHTML = titleInfo
