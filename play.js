@@ -506,11 +506,8 @@ async function saveGameResult(data, result) {
       moveCount:    game.history().length,
       playedAt:     Date.now(),
       ratingChange,
-<<<<<<< Updated upstream
       gameId: currentGameId,
-=======
       timeControl:  data.timeControl || selectedTc || "rapid",
->>>>>>> Stashed changes
     }),
   ]);
 }
