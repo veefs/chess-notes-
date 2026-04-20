@@ -238,6 +238,36 @@
     animation: pulse-text 1.5s infinite;
   }
 
+  .action-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter .15s;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+
+.action-btn:hover  { filter: brightness(1.15); }
+.action-btn:active { filter: brightness(.9); }
+
+.resign-btn {
+  background: #c0392b;
+  color: #fff;
+  border: none;
+}
+
+.draw-btn {
+  background: #4a4a4a;
+  color: #ccc;
+  border: none;
+}
+
+.draw-btn:hover { background: rgba(165,148,192,.22); }
+
   @keyframes pulse-text {
     0%, 100% { opacity: 1; }
     50%       { opacity: .4; }
@@ -378,6 +408,23 @@
       <button class="cancel-btn" id="cancelBtn">Cancel Search</button>
 
       <div class="queue-status" id="queueStatus">Select a time control to play</div>
+
+      <!-- Game actions (shown during game) -->
+<div id="gameActions" style="display:none;flex-direction:column;gap:8px;margin-top:4px;">
+  <div class="panel-divider"></div>
+  <button class="action-btn draw-btn" id="drawOfferBtn">Offer Draw</button>
+  <button class="action-btn resign-btn" id="resignBtn">Resign</button>
+  <div id="drawOfferMsg" style="font-size:12px;text-align:center;min-height:16px;color:var(--muted);"></div>
+</div>
+
+<!-- Incoming draw offer -->
+<div id="drawOfferIncoming" class="hidden" style="margin-top:8px;background:rgba(165,148,192,.1);border:1px solid var(--accent);border-radius:10px;padding:14px;text-align:center;display:flex;flex-direction:column;gap:10px;">
+  <div style="font-size:13px;font-weight:600;color:var(--text2);">Draw offered by opponent</div>
+  <div style="display:flex;gap:8px;">
+    <button class="action-btn draw-btn" id="acceptDrawBtn" style="flex:1;">Accept</button>
+    <button class="action-btn resign-btn" id="declineDrawBtn" style="flex:1;background:var(--bg4);color:var(--muted);border-color:var(--border);">Decline</button>
+  </div>
+</div>
     </div>
 
   </div>

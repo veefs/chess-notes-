@@ -1,4 +1,5 @@
 const settings = window.getSettings ? window.getSettings() : {};
+const pieceSet = settings.pieceSet || "cburnett";
 
 // =======================
 // STATE
@@ -25,7 +26,7 @@ let board = Chessboard("board", {
   snapSpeed: 150,
   snapbackSpeed: 200,
   position: "start",
-  pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+  pieceTheme: `https://chessboardjs.com/img/chesspieces/${pieceSet}/{piece}.png`,
   onDrop: onDrop,
   onDragStart: onDragStart,
   onSnapbackEnd: () => clearLegalDots(),
