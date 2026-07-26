@@ -541,6 +541,23 @@ check("tournament context is restored from persisted game data", () => {
     ),
     "black"
   );
+  assert.equal(
+    context.resolveGameTimeControl({ timeControl: "blitz" }),
+    "blitz"
+  );
+  assert.equal(context.resolveGameTimeControl({}), "rapid");
+  assert.equal(
+    context.resolveGameTimeControl({ timeControl: "forged-control" }),
+    null
+  );
+  assert.match(
+    source,
+    /const challengeTimeControl = resolveGameTimeControl\(challengeGame\)/
+  );
+  assert.match(
+    source,
+    /const gameTimeControl = resolveGameTimeControl\(gameData\)/
+  );
 });
 
 await checkAsync("duplicate result processing is atomic, idempotent, and retryable", async () => {
@@ -844,6 +861,40 @@ check("timeout and move transitions are guarded by canonical game state", () => 
   assert.equal(moved.activeColor, "black");
   assert.equal(moved.whiteTimeMs, 500);
   assert.deepEqual(Array.from(moved.moves), ["e4"]);
+
+  const skewedProjection = context.projectClock({
+    whiteTimeMs: 1000,
+    blackTimeMs: 5000,
+    activeColor: "white",
+    updatedAt: 10_000,
+  }, 9_000);
+  assert.equal(skewedProjection.updatedAt, 10_000);
+  assert.equal(skewedProjection.whiteTimeMs, 1000);
+
+  const skewedMove = context.transitionGameState(
+    gameState,
+    {
+      type: "move",
+      previousMoves: [],
+      moves: ["e4"],
+      fen: "after-e4",
+    },
+    9_000
+  );
+  assert.equal(skewedMove.clockUpdatedAt, 10_000);
+  assert.equal(skewedMove.whiteTimeMs, 1000);
+
+  const skewedFinish = context.transitionGameState(
+    gameState,
+    {
+      type: "finish",
+      reason: "resign",
+      actorColor: "black",
+    },
+    9_000
+  );
+  assert.equal(skewedFinish.clockUpdatedAt, 10_000);
+  assert.equal(skewedFinish.finishedAt, 10_000);
 
   const lateMove = context.transitionGameState(
     gameState,

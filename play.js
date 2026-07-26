@@ -79,6 +79,12 @@ function normalizeTimeControl(value) {
     : null;
 }
 
+function resolveGameTimeControl(gameData) {
+  if (!isRecord(gameData)) return null;
+  if (gameData.timeControl == null) return "rapid";
+  return normalizeTimeControl(gameData.timeControl);
+}
+
 function safeAvatarUrl(value, baseHref = window.location.href) {
   if (typeof value !== "string" || value.length > 2048) return null;
   const normalized = value.trim();
@@ -424,17 +430,33 @@ function clockFromGameData(data, now = Date.now()) {
   return { whiteTimeMs, blackTimeMs, activeColor, updatedAt };
 }
 
+function monotonicGameTime(data, now = Date.now()) {
+  // This prevents accidental backward movement only. Authoritative server time
+  // is still required to stop a malicious client from submitting a future time.
+  const candidateNow = Number.isFinite(now) ? now : Date.now();
+  const priorUpdatedAt = Number.isFinite(data?.clockUpdatedAt)
+    ? data.clockUpdatedAt
+    : Number.isFinite(data?.createdAt)
+      ? data.createdAt
+      : candidateNow;
+  return Math.max(candidateNow, priorUpdatedAt);
+}
+
 function projectClock(clock, now = Date.now()) {
   if (!clock) return null;
 
   const projected = { ...clock };
-  const elapsed = Math.max(0, now - clock.updatedAt);
+  const effectiveNow = monotonicGameTime(
+    { clockUpdatedAt: clock.updatedAt },
+    now
+  );
+  const elapsed = Math.max(0, effectiveNow - clock.updatedAt);
   if (clock.activeColor === "white") {
     projected.whiteTimeMs = Math.max(0, clock.whiteTimeMs - elapsed);
   } else {
     projected.blackTimeMs = Math.max(0, clock.blackTimeMs - elapsed);
   }
-  projected.updatedAt = now;
+  projected.updatedAt = effectiveNow;
   return projected;
 }
 
@@ -452,6 +474,13 @@ function withClockFields(data, clock) {
 }
 
 function finishedGameState(current, reason, winner, now, clock) {
+  const effectiveNow = monotonicGameTime(current, now);
+  const finishedClock = clock
+    ? {
+        ...clock,
+        updatedAt: Math.max(clock.updatedAt, effectiveNow),
+      }
+    : clock;
   const result = winner === "white"
     ? "1-0"
     : winner === "black"
@@ -464,15 +493,19 @@ function finishedGameState(current, reason, winner, now, clock) {
     finishReason: reason,
     winner: winner || null,
     result,
-    finishedAt: now,
+    finishedAt: effectiveNow,
     drawOffer: null,
-  }, clock);
+  }, finishedClock);
 }
 
 function transitionGameState(current, command, now = Date.now()) {
   if (!current || current.status !== "playing" || !command) return null;
 
-  const clock = projectClock(clockFromGameData(current, now), now);
+  const effectiveNow = monotonicGameTime(current, now);
+  const clock = projectClock(
+    clockFromGameData(current, effectiveNow),
+    effectiveNow
+  );
 
   if (command.type === "move") {
     const remoteMoves = normalizeMoves(current.moves);
@@ -493,12 +526,12 @@ function transitionGameState(current, command, now = Date.now()) {
           current,
           "timeout",
           oppositeColor(clock.activeColor),
-          now,
+          effectiveNow,
           clock
         );
       }
       clock.activeColor = oppositeColor(clock.activeColor);
-      clock.updatedAt = now;
+      clock.updatedAt = effectiveNow;
     }
 
     return withClockFields({
@@ -538,7 +571,13 @@ function transitionGameState(current, command, now = Date.now()) {
     return null;
   }
 
-  return finishedGameState(current, command.reason, winner, now, clock);
+  return finishedGameState(
+    current,
+    command.reason,
+    winner,
+    effectiveNow,
+    clock
+  );
 }
 
 let selectedTc = null;
@@ -633,12 +672,13 @@ function startTimers(data) {
 function advanceLocalClock(nextActiveColor) {
   if (!clockSnapshot) return;
   const now = Date.now();
+  const projected = projectClock(clockSnapshot, now);
   clockSnapshot = {
-    ...projectClock(clockSnapshot, now),
+    ...projected,
     activeColor: nextActiveColor,
-    updatedAt: now,
+    updatedAt: projected.updatedAt,
   };
-  renderClockTick(now);
+  renderClockTick(projected.updatedAt);
 }
 
 function handleTimeout() {
@@ -922,7 +962,13 @@ function listenToGame(gameId) {
           setQueueStatus("Game data could not be synchronized.");
           return;
         }
-        updatePlayerBars(data);
+        updatePlayerBars(data).catch(() => {
+          const message = document.getElementById("drawOfferMsg");
+          if (message && !message.textContent) {
+            message.textContent = "Player details could not be loaded.";
+            message.style.color = "var(--muted)";
+          }
+        });
 
         if (data.status === "finished") {
           handleFinishedGame(data);
@@ -1743,9 +1789,11 @@ function initializeFirebaseSession() {
             const challengeSnap = await get(ref(window.firebaseDb, `games/${challengeId}`));
             const challengeGame = challengeSnap.val();
             const challengeColor = colorForUser(challengeGame, safeUserUid);
+            const challengeTimeControl = resolveGameTimeControl(challengeGame);
             if (!challengeGame ||
                 !["playing", "finished"].includes(challengeGame.status) ||
-                !challengeColor) {
+                !challengeColor ||
+                !challengeTimeControl) {
               handleFirebaseUnavailable("This challenge is unavailable.");
               return;
             }
@@ -1756,7 +1804,7 @@ function initializeFirebaseSession() {
             );
             if (currentTournamentId) applyTournamentModeUi();
             window.history.replaceState({}, "", "play.html");
-            startGame(challengeId, challengeColor, challengeGame.timeControl);
+            startGame(challengeId, challengeColor, challengeTimeControl);
             return;
           }
 
@@ -1770,9 +1818,11 @@ function initializeFirebaseSession() {
           const gameDataSnap = await get(ref(window.firebaseDb, `games/${gameId}`));
           const gameData = gameDataSnap.val();
           const color = colorForUser(gameData, safeUserUid);
+          const gameTimeControl = resolveGameTimeControl(gameData);
           if (!gameData ||
               !["playing", "finished"].includes(gameData.status) ||
-              !color) {
+              !color ||
+              !gameTimeControl) {
             return;
           }
 
@@ -1781,7 +1831,7 @@ function initializeFirebaseSession() {
             gameData
           );
           if (currentTournamentId) applyTournamentModeUi();
-          startGame(gameId, color, gameData.timeControl);
+          startGame(gameId, color, gameTimeControl);
         } catch {
           authListenerRegistered = false;
           handleFirebaseUnavailable(
