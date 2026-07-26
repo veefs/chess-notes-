@@ -808,16 +808,15 @@ check("legacy snapshots start a rapid clock and reject forged controls", () => {
   const now = Date.now();
   vm.runInContext(
     "timersStarted = false; clockSnapshot = null; timerInterval = null;" +
-    " gameOverHandled = false; finishTransitionPending = false;",
+    " gameOverHandled = true; finishTransitionPending = false;",
     context
   );
   const legacySnapshot = {
     status: "playing",
-    whiteTime: 600,
-    blackTime: 600,
+    whiteTime: 321,
+    blackTime: 222,
     activeColor: "white",
-    clockUpdatedAt: now,
-    createdAt: now,
+    createdAt: now - (3 * 24 * 60 * 60 * 1000),
     moves: [],
   };
 
@@ -825,13 +824,17 @@ check("legacy snapshots start a rapid clock and reject forged controls", () => {
   const startedState = vm.runInContext(
     "({ timersStarted, timerInterval," +
     " timeControl: clockSnapshot?.timeControl," +
-    " whiteTimeMs: clockSnapshot?.whiteTimeMs })",
+    " whiteTimeMs: clockSnapshot?.whiteTimeMs," +
+    " updatedAt: clockSnapshot?.updatedAt," +
+    " displayWhiteTime: whiteTime })",
     context
   );
   assert.equal(startedState.timersStarted, true);
   assert.equal(startedState.timerInterval, 1);
   assert.equal(startedState.timeControl, "rapid");
-  assert.equal(startedState.whiteTimeMs, 600_000);
+  assert.equal(startedState.whiteTimeMs, 321_000);
+  assert.ok(startedState.updatedAt >= now);
+  assert.equal(startedState.displayWhiteTime, 321);
 
   vm.runInContext(
     "timersStarted = false; clockSnapshot = null; timerInterval = null;",
@@ -848,6 +851,7 @@ check("legacy snapshots start a rapid clock and reject forged controls", () => {
     vm.runInContext("timersStarted || clockSnapshot !== null", context),
     false
   );
+  vm.runInContext("gameOverHandled = false;", context);
 });
 
 check("timeout and move transitions are guarded by canonical game state", () => {
@@ -945,6 +949,31 @@ check("timeout and move transitions are guarded by canonical game state", () => 
   assert.equal(upgradedLegacyMove.timeControl, "rapid");
   assert.equal(upgradedLegacyMove.clockUpdatedAt, 10_000);
   assert.equal(upgradedLegacyMove.whiteTimeMs, 1000);
+
+  const historicalLegacyMove = context.transitionGameState(
+    {
+      status: "playing",
+      whiteTime: 321,
+      blackTime: 222,
+      activeColor: "white",
+      createdAt: 1_000,
+      moves: [],
+      fen: "start",
+    },
+    {
+      type: "move",
+      previousMoves: [],
+      moves: ["e4"],
+      fen: "after-e4",
+    },
+    1_000_000
+  );
+  assert.equal(historicalLegacyMove.status, "playing");
+  assert.equal(historicalLegacyMove.timeControl, "rapid");
+  assert.equal(historicalLegacyMove.clockUpdatedAt, 1_000_000);
+  assert.equal(historicalLegacyMove.whiteTimeMs, 321_000);
+  assert.equal(historicalLegacyMove.blackTimeMs, 222_000);
+
   assert.equal(
     context.transitionGameState(
       { ...gameState, timeControl: "forged-control" },

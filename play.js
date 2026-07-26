@@ -433,12 +433,11 @@ function clockFromGameData(data, now = Date.now()) {
     normalizedData.activeColor === "white"
     ? normalizedData.activeColor
     : (moves.length % 2 === 0 ? "white" : "black");
-  const candidateTimestamp = Number.isFinite(normalizedData.clockUpdatedAt)
+  // Legacy games have remaining seconds but no clockUpdatedAt. Their createdAt
+  // is not a clock baseline; begin timing those stored seconds from this read.
+  const updatedAt = Number.isFinite(normalizedData.clockUpdatedAt)
     ? normalizedData.clockUpdatedAt
-    : normalizedData.createdAt;
-  const updatedAt = Number.isFinite(candidateTimestamp)
-    ? candidateTimestamp
-    : now;
+    : (Number.isFinite(now) ? now : Date.now());
 
   return {
     whiteTimeMs,
@@ -455,9 +454,7 @@ function monotonicGameTime(data, now = Date.now()) {
   const candidateNow = Number.isFinite(now) ? now : Date.now();
   const priorUpdatedAt = Number.isFinite(data?.clockUpdatedAt)
     ? data.clockUpdatedAt
-    : Number.isFinite(data?.createdAt)
-      ? data.createdAt
-      : candidateNow;
+    : candidateNow;
   return Math.max(candidateNow, priorUpdatedAt);
 }
 
