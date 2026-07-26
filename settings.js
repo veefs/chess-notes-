@@ -13,8 +13,35 @@
   });
   const BOARD_THEMES = new Set(["classic", "green", "blue", "purple"]);
   const PIECE_THEMES = Object.freeze({
+    staunty: Object.freeze({ directory: "pieces/staunty", extension: "svg" }),
     cburnett: Object.freeze({ directory: "pieces/cburnett", extension: "svg" }),
+    maestro: Object.freeze({ directory: "pieces/maestro", extension: "svg" }),
+    fresca: Object.freeze({ directory: "pieces/fresca", extension: "svg" }),
+    california: Object.freeze({ directory: "pieces/california", extension: "svg" }),
+    caliente: Object.freeze({ directory: "pieces/caliente", extension: "svg" }),
+    cardinal: Object.freeze({ directory: "pieces/cardinal", extension: "svg" }),
+    alpha: Object.freeze({ directory: "pieces/alpha", extension: "svg" }),
+    fantasy: Object.freeze({ directory: "pieces/fantasy", extension: "svg" }),
+    pixel: Object.freeze({ directory: "pieces/pixel", extension: "svg" }),
+    tatiana: Object.freeze({ directory: "pieces/tatiana", extension: "svg" }),
+    merida: Object.freeze({ directory: "pieces/merida", extension: "svg" }),
+    pirouetti: Object.freeze({ directory: "pieces/pirouetti", extension: "svg" }),
+    chessnut: Object.freeze({ directory: "pieces/chessnut", extension: "svg" }),
+    chess7: Object.freeze({ directory: "pieces/chess7", extension: "svg" }),
+    reillycraig: Object.freeze({ directory: "pieces/reillycraig", extension: "svg" }),
+    celtic: Object.freeze({ directory: "pieces/celtic", extension: "svg" }),
+    spatial: Object.freeze({ directory: "pieces/spatial", extension: "svg" }),
+    gioco: Object.freeze({ directory: "pieces/gioco", extension: "svg" }),
+    governor: Object.freeze({ directory: "pieces/governor", extension: "svg" }),
+    companion: Object.freeze({ directory: "pieces/companion", extension: "svg" }),
+    dubrovny: Object.freeze({ directory: "pieces/dubrovny", extension: "svg" }),
+    horsey: Object.freeze({ directory: "pieces/horsey", extension: "svg" }),
+    icpieces: Object.freeze({ directory: "pieces/icpieces", extension: "svg" }),
+    kosal: Object.freeze({ directory: "pieces/kosal", extension: "svg" }),
+    leipzig: Object.freeze({ directory: "pieces/leipzig", extension: "svg" }),
+    letter: Object.freeze({ directory: "pieces/letter", extension: "svg" }),
     monarchy: Object.freeze({ directory: "pieces/monarchy", extension: "webp" }),
+    mpchess: Object.freeze({ directory: "pieces/mpchess", extension: "svg" }),
   });
 
   function normalizeBoolean(value, fallback) {

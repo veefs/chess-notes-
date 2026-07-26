@@ -252,13 +252,53 @@ async function readBoundedPuzzleResponse(response) {
     throw new Error("Puzzle source refused the required byte range.");
   }
 
-  const contentLength = Number(response.headers.get("content-length"));
+  const contentLengthHeader = response.headers.get("content-length");
+  const contentLength = Number(contentLengthHeader);
   if (
-    !Number.isFinite(contentLength)
+    !/^\d+$/.test(contentLengthHeader || "")
+    || !Number.isFinite(contentLength)
+    || !Number.isSafeInteger(contentLength)
     || contentLength <= 0
-    || contentLength > REMOTE_PUZZLE_SOURCE.byteLimit
+  ) {
+    throw new Error("Puzzle source returned an invalid Content-Length.");
+  }
+
+  const contentRangeHeader = response.headers.get("content-range");
+  if (!contentRangeHeader) {
+    throw new Error("Puzzle source is missing Content-Range metadata.");
+  }
+  const contentRange = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(
+    contentRangeHeader.trim(),
+  );
+  if (!contentRange) {
+    throw new Error("Puzzle source returned an invalid Content-Range.");
+  }
+
+  const rangeStart = Number(contentRange[1]);
+  const rangeEnd = Number(contentRange[2]);
+  const totalLength = Number(contentRange[3]);
+  if (
+    !Number.isSafeInteger(rangeStart)
+    || !Number.isSafeInteger(rangeEnd)
+    || !Number.isSafeInteger(totalLength)
+    || rangeEnd < rangeStart
+  ) {
+    throw new Error("Puzzle source returned an invalid Content-Range.");
+  }
+  if (rangeStart !== 0) {
+    throw new Error("Puzzle source range must start at byte zero.");
+  }
+  if (rangeEnd - rangeStart + 1 !== contentLength) {
+    throw new Error("Puzzle source Content-Range does not match Content-Length.");
+  }
+  if (
+    contentLength > REMOTE_PUZZLE_SOURCE.byteLimit
+    || rangeEnd >= REMOTE_PUZZLE_SOURCE.byteLimit
   ) {
     throw new Error("Puzzle sample exceeded its byte budget.");
+  }
+  if (totalLength <= rangeEnd) {
+    throw new Error("Puzzle source returned an invalid total length.");
   }
 
   const contentType = response.headers.get("content-type") || "";

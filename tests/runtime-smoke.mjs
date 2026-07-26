@@ -193,7 +193,10 @@ await test("settings recover from malformed storage and normalize themes", () =>
   );
   assert.equal(warnings.length >= 1, true);
   assert.equal(context.resolvePieceTheme("cburnett"), "pieces/cburnett/{piece}.svg");
+  assert.equal(context.resolvePieceTheme("staunty"), "pieces/staunty/{piece}.svg");
+  assert.equal(context.resolvePieceTheme("maestro"), "pieces/maestro/{piece}.svg");
   assert.equal(context.resolvePieceTheme("monarchy"), "pieces/monarchy/{piece}.webp");
+  assert.equal(context.resolvePieceTheme("libra"), "pieces/cburnett/{piece}.svg");
   assert.equal(context.resolvePieceTheme("../../remote"), "pieces/cburnett/{piece}.svg");
 
   storedSettings = JSON.stringify({
@@ -209,7 +212,25 @@ await test("settings recover from malformed storage and normalize themes", () =>
   assert.equal(normalized.pieceSet, "cburnett");
   assert.equal(normalized.sound, false);
 
-  for (const [theme, extension] of [["cburnett", "svg"], ["monarchy", "webp"]]) {
+  const pieceSetMarkup = read("settings.html").match(
+    /<select[^>]+id="pieceSet"[^>]*>[\s\S]*?<\/select>/i,
+  )?.[0];
+  assert.ok(pieceSetMarkup, "settings must expose the piece-set selector");
+  const selectableThemes = [
+    ...pieceSetMarkup.matchAll(/<option\s+value="([^"]+)"/gi),
+  ].map((match) => match[1]);
+
+  for (const theme of selectableThemes) {
+    if (theme === "libra") {
+      assert.equal(context.resolvePieceTheme(theme), "pieces/cburnett/{piece}.svg");
+      continue;
+    }
+    const extension = theme === "monarchy" ? "webp" : "svg";
+    assert.equal(
+      context.resolvePieceTheme(theme),
+      `pieces/${theme}/{piece}.${extension}`,
+      `${theme} should resolve to its complete local piece directory`,
+    );
     for (const piece of ["wK", "wQ", "wR", "wB", "wN", "wP", "bK", "bQ", "bR", "bB", "bN", "bP"]) {
       const asset = context.resolvePieceTheme(theme).replace("{piece}", piece);
       assert.equal(path.extname(asset), `.${extension}`);
@@ -403,6 +424,7 @@ await test("puzzles start offline, bound remote reads, lock turns, and keep unde
         get(name) {
           const headers = {
             "content-length": String(bytes.byteLength),
+            "content-range": `bytes 0-${bytes.byteLength - 1}/1084213690`,
             "content-type": "text/plain",
           };
           return headers[name.toLowerCase()] || null;
@@ -431,6 +453,78 @@ await test("puzzles start offline, bound remote reads, lock turns, and keep unde
   );
   assert.equal(request.options.headers.Range, "bytes=0-262143");
   assert.equal(cancelled, 1);
+
+  const invalidRangeResponse = ({
+    status = 206,
+    contentLength = String(bytes.byteLength),
+    contentRange,
+  }) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    headers: {
+      get(name) {
+        const headers = {
+          "content-length": contentLength,
+          "content-range": contentRange,
+          "content-type": "text/plain",
+        };
+        return headers[name.toLowerCase()] ?? null;
+      },
+    },
+    body: {
+      getReader() {
+        throw new Error("invalid range metadata must be rejected before reading");
+      },
+    },
+  });
+
+  for (const [description, response, message] of [
+    [
+      "missing Content-Range",
+      invalidRangeResponse({ contentRange: null }),
+      /missing Content-Range/i,
+    ],
+    [
+      "malformed Content-Range",
+      invalidRangeResponse({ contentRange: "bytes nope" }),
+      /invalid Content-Range/i,
+    ],
+    [
+      "non-zero Content-Range start",
+      invalidRangeResponse({
+        contentRange: `bytes 1-${bytes.byteLength}/${1084213690}`,
+      }),
+      /start at byte zero/i,
+    ],
+    [
+      "Content-Range length mismatch",
+      invalidRangeResponse({
+        contentRange: `bytes 0-${bytes.byteLength}/${1084213690}`,
+      }),
+      /does not match Content-Length/i,
+    ],
+    [
+      "Content-Range beyond requested budget",
+      invalidRangeResponse({
+        contentLength: String(api.REMOTE_PUZZLE_SOURCE.byteLimit + 1),
+        contentRange: `bytes 0-${api.REMOTE_PUZZLE_SOURCE.byteLimit}/${1084213690}`,
+      }),
+      /byte budget/i,
+    ],
+    [
+      "Content-Range with incoherent total",
+      invalidRangeResponse({
+        contentRange: `bytes 0-${bytes.byteLength - 1}/${bytes.byteLength - 1}`,
+      }),
+      /invalid total length/i,
+    ],
+  ]) {
+    await assert.rejects(
+      api.loadRemotePuzzleSample(async () => response),
+      message,
+      description,
+    );
+  }
 
   await assert.rejects(
     api.loadRemotePuzzleSample(async () => ({
