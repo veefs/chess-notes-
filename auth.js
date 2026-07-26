@@ -34,6 +34,54 @@ const NAV_TITLES = {
   mod: { label: "Mod", color: "#f08080" },
 };
 
+const CLOUDINARY_AVATAR_PATH_PREFIX = "/dszgbkb1f/image/upload/";
+
+function clearElement(element) {
+  if (element) element.replaceChildren();
+}
+
+function addDivider(parent) {
+  const divider = document.createElement("div");
+  divider.className = "cog-divider";
+  divider.setAttribute("role", "separator");
+  parent.appendChild(divider);
+}
+
+function addMenuLink(parent, label, href) {
+  const link = document.createElement("a");
+  link.className = "cog-item";
+  link.href = href;
+  link.setAttribute("role", "menuitem");
+  link.textContent = label;
+  parent.appendChild(link);
+  return link;
+}
+
+function safeAvatarUrl(value) {
+  if (
+    typeof value !== "string"
+    || !value
+    || value.length > 2048
+    || value.trim() !== value
+  ) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:"
+      && url.hostname === "res.cloudinary.com"
+      && !url.username
+      && !url.password
+      && !url.port
+      && url.pathname.startsWith(CLOUDINARY_AVATAR_PATH_PREFIX)
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 onAuthStateChanged(auth, async user => {
   const dropdown = document.getElementById("cogDropdown");
   const navUser = document.getElementById("navUsername");
@@ -44,29 +92,46 @@ onAuthStateChanged(auth, async user => {
     ]);
     const username = usernameSnap.val() || user.email;
     const avatarSnap = await get(ref(db, `users/${user.uid}/avatarUrl`));
-    const avatarUrl = avatarSnap.val();
+    const avatarUrl = safeAvatarUrl(avatarSnap.val());
     window.myAvatarUrl = avatarUrl;
     const titleKey = titleSnap.val();
     const titleInfo = titleKey ? NAV_TITLES[titleKey] : null;
-    const titleHTML = titleInfo
-      ? ` <span style="font-size:10px;font-weight:700;color:${titleInfo.color};letter-spacing:.5px;">${titleInfo.label}</span>`
-      : "";
     if (navUser) { navUser.textContent = username; navUser.classList.remove("hidden"); }
     if (dropdown) {
-      dropdown.innerHTML = `
-  <div class="cog-item cog-user">👤 ${username}${titleHTML}</div>
-  <div class="cog-divider"></div>
-  <div class="cog-item" onclick="window.location.href='settings.html'">Settings</div>
-  <div class="cog-divider"></div>
-  <div class="cog-item" id="signOutBtn">Sign Out</div>
-`;
-      document.getElementById("signOutBtn").onclick = () => signOut(auth).then(() => location.reload());
+      clearElement(dropdown);
+
+      const userItem = document.createElement("div");
+      userItem.className = "cog-item cog-user";
+      userItem.textContent = `👤 ${username}`;
+      if (titleInfo) {
+        const title = document.createElement("span");
+        title.className = "nav-title-badge";
+        title.style.color = titleInfo.color;
+        title.textContent = titleInfo.label;
+        userItem.append(" ", title);
+      }
+      dropdown.appendChild(userItem);
+      addDivider(dropdown);
+      addMenuLink(dropdown, "Settings", "settings.html");
+      addDivider(dropdown);
+
+      const signOutButton = document.createElement("button");
+      signOutButton.type = "button";
+      signOutButton.className = "cog-item cog-action";
+      signOutButton.id = "signOutBtn";
+      signOutButton.setAttribute("role", "menuitem");
+      signOutButton.textContent = "Sign Out";
+      signOutButton.addEventListener("click", () =>
+        signOut(auth).then(() => location.reload())
+      );
+      dropdown.appendChild(signOutButton);
     }
   } else {
     if (navUser) navUser.classList.add("hidden");
-    if (dropdown) dropdown.innerHTML = `
-      <div class="cog-item" onclick="window.location.href='login.html';">Log In</div>
-      <div class="cog-item" onclick="window.location.href='signup.html';">Sign Up</div>
-    `;
+    if (dropdown) {
+      clearElement(dropdown);
+      addMenuLink(dropdown, "Log In", "login.html");
+      addMenuLink(dropdown, "Sign Up", "signup.html");
+    }
   }
 });

@@ -1,131 +1,208 @@
-const boardIds = ["board1", "board2", "board3", "board4"];
+"use strict";
 
-const instances = boardIds.map((id) => {
-  const board = Chessboard(id, {
+const boardIds = ["board1", "board2", "board3", "board4"];
+const gridSettings = window.getSettings ? window.getSettings() : {};
+const gridPieceTheme = window.resolvePieceTheme
+  ? window.resolvePieceTheme(gridSettings.pieceSet)
+  : "pieces/cburnett/{piece}.svg";
+
+const instances = boardIds.map((id) => ({
+  id,
+  board: Chessboard(id, {
     position: "start",
     draggable: false,
-    pieceTheme:
-      "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
-  });
+    pieceTheme: gridPieceTheme,
+  }),
+  game: new Chess(),
+  lastMovesLength: 0,
+  gameId: null,
+}));
 
-  return {
-    id,
-    board,
-    game: new Chess(),
-    lastMovesLength: 0,
-    gameId: null,
-  };
-});
+let pollGeneration = 0;
+let pendingRefreshes = 0;
+let pollLoopPromise = null;
+const REQUEST_TIMEOUT_MS = 8000;
 
-console.log("♟ 4 independent boards ready");
+async function fetchChecked(url, responseType) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      headers: responseType === "text"
+        ? { Accept: "application/x-chess-pgn, text/plain;q=0.9" }
+        : { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Lichess returned HTTP ${response.status}.`);
+    }
+    return responseType === "text" ? await response.text() : await response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function getTVGames() {
-  const res = await fetch("https://lichess.org/api/tv/channels");
-  const data = await res.json();
-
+  const data = await fetchChecked("https://lichess.org/api/tv/channels", "json");
   return [
-    data?.bullet?.gameId,
-    data?.blitz?.gameId,
-    data?.rapid?.gameId,
-    data?.classical?.gameId,
-  ].filter(Boolean);
+    data?.bullet?.gameId || null,
+    data?.blitz?.gameId || null,
+    data?.rapid?.gameId || null,
+    data?.classical?.gameId || null,
+  ];
 }
 
 async function fetchPGN(gameId) {
-  const res = await fetch(`https://lichess.org/game/export/${gameId}`);
-  return await res.text();
+  return fetchChecked(
+    `https://lichess.org/game/export/${encodeURIComponent(gameId)}`,
+    "text",
+  );
+}
+
+function readPgnTag(pgn, tag) {
+  const match = pgn.match(new RegExp(`^\\[${tag} "([^"]*)"\\]\\r?$`, "m"));
+  return match ? match[1].slice(0, 80) : "";
+}
+
+function formatPlayer(pgn, color) {
+  const name = readPgnTag(pgn, color) || color;
+  const title = readPgnTag(pgn, `${color}Title`);
+  const rating = readPgnTag(pgn, `${color}Elo`);
+  return [title, name, rating ? `(${rating})` : ""].filter(Boolean).join(" ");
 }
 
 function parsePlayers(pgn, prefix) {
-  const whiteMatch = pgn.match(/\[White "([^"]+)"\]/);
-  const blackMatch = pgn.match(/\[Black "([^"]+)"\]/);
-
-  const whiteElo = pgn.match(/\[WhiteElo "([^"]+)"\]/);
-  const blackElo = pgn.match(/\[BlackElo "([^"]+)"\]/);
-
-  const whiteTitle = pgn.match(/\[WhiteTitle "([^"]+)"\]/);
-  const blackTitle = pgn.match(/\[BlackTitle "([^"]+)"\]/);
-
-  const whiteName = whiteMatch ? whiteMatch[1] : "White";
-  const blackName = blackMatch ? blackMatch[1] : "Black";
-
-  const wTitle = whiteTitle ? `<span class="title">${whiteTitle[1]}</span>` : "";
-  const bTitle = blackTitle ? `<span class="title">${blackTitle[1]}</span>` : "";
-
-  const wRating = whiteElo ? `<span class="rating">(${whiteElo[1]})</span>` : "";
-  const bRating = blackElo ? `<span class="rating">(${blackElo[1]})</span>` : "";
-
   const whiteBar = document.getElementById(`${prefix}-white`);
   const blackBar = document.getElementById(`${prefix}-black`);
-
-  if (whiteBar) {
-    whiteBar.innerHTML = `${wTitle}${whiteName} ${wRating}`;
-  }
-
-  if (blackBar) {
-    blackBar.innerHTML = `${bTitle}${blackName} ${bRating}`;
-  }
+  if (whiteBar) whiteBar.textContent = formatPlayer(pgn, "White");
+  if (blackBar) blackBar.textContent = formatPlayer(pgn, "Black");
 }
+
 function clearHighlights(boardId) {
   document
     .querySelectorAll(`#${boardId} .highlight-square`)
-    .forEach(el => el.classList.remove("highlight-square"));
+    .forEach((element) => element.classList.remove("highlight-square"));
 }
 
 function highlightSquare(boardId, square) {
-  const el = document.querySelector(`#${boardId} .square-${square}`);
-  if (el) el.classList.add("highlight-square");
+  const element = document.querySelector(`#${boardId} .square-${square}`);
+  if (element) element.classList.add("highlight-square");
+}
+
+function parseMoveTokens(pgn) {
+  const moveText = pgn.split(/\r?\n\r?\n/).slice(1).join(" ");
+  if (!moveText) return [];
+
+  return moveText
+    .replace(/\{[^}]*\}/g, " ")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\$\d+/g, " ")
+    .replace(/\d+\.(?:\.\.)?/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !/^(?:1-0|0-1|1\/2-1\/2|\*)$/.test(token));
 }
 
 function applyMoves(instance, pgn) {
-  const moveText = pgn.split("\n\n")[1];
-  if (!moveText) return;
+  const moves = parseMoveTokens(pgn);
+  let appliedLength = instance.lastMovesLength;
 
-  const moves = moveText
-    .replace(/\{[^}]*\}/g, "")
-    .replace(/\d+\./g, "")
-    .trim()
-    .split(/\s+/);
-
-  for (let i = instance.lastMovesLength; i < moves.length; i++) {
-    const san = moves[i];
-    const move = instance.game.move(san);
-
-    if (move) {
-      instance.board.position(instance.game.fen());
-
-      clearHighlights(instance.id);
-      highlightSquare(instance.id, move.from);
-      highlightSquare(instance.id, move.to);
-    }
-  }
-
-  instance.lastMovesLength = moves.length;
-}
-
-async function update() {
-  const gameIds = await getTVGames();
-
-  for (let i = 0; i < instances.length; i++) {
-    const inst = instances[i];
-    const gameId = gameIds[i];
-
-    if (!gameId) continue;
-
-    if (inst.gameId !== gameId) {
-      inst.gameId = gameId;
-      inst.game.reset();
-      inst.board.position("start");
-      inst.lastMovesLength = 0;
+  for (let index = instance.lastMovesLength; index < moves.length; index++) {
+    const move = instance.game.move(moves[index]);
+    if (!move) {
+      console.warn("Lichess PGN contained an unapplied move; waiting for a fresh export.");
+      break;
     }
 
-    const pgn = await fetchPGN(gameId);
-    if (!pgn) continue;
+    appliedLength = index + 1;
+    instance.board.position(instance.game.fen());
+    clearHighlights(instance.id);
+    highlightSquare(instance.id, move.from);
+    highlightSquare(instance.id, move.to);
+  }
 
-    parsePlayers(pgn, inst.id);
-    applyMoves(inst, pgn);
+  instance.lastMovesLength = appliedLength;
+}
+
+async function performUpdate(generation) {
+  try {
+    const gameIds = await getTVGames();
+    if (generation !== pollGeneration) return;
+
+    const pgns = await Promise.all(gameIds.map(async (gameId) => {
+      if (!gameId) return null;
+      try {
+        return await fetchPGN(gameId);
+      } catch (error) {
+        console.warn("One Lichess board could not refresh; its previous position was preserved.", error);
+        return null;
+      }
+    }));
+    if (generation !== pollGeneration) return;
+
+    for (let index = 0; index < instances.length; index++) {
+      const instance = instances[index];
+      const gameId = gameIds[index];
+      const pgn = pgns[index];
+      if (!gameId || !pgn) continue;
+
+      if (instance.gameId !== gameId) {
+        instance.gameId = gameId;
+        instance.game.reset();
+        instance.board.position("start");
+        instance.lastMovesLength = 0;
+      }
+
+      parsePlayers(pgn, instance.id);
+      applyMoves(instance, pgn);
+    }
+  } catch (error) {
+    if (generation === pollGeneration) {
+      console.warn("Watch grid refresh failed; previous positions were preserved.", error);
+    }
   }
 }
 
-update();
-setInterval(update, 3000);
+async function drainUpdates() {
+  try {
+    while (pendingRefreshes > 0) {
+      pendingRefreshes = 0;
+      const generation = ++pollGeneration;
+      await performUpdate(generation);
+    }
+  } finally {
+    pollLoopPromise = null;
+  }
+}
+
+function requestUpdate() {
+  pendingRefreshes++;
+  if (!pollLoopPromise) pollLoopPromise = drainUpdates();
+  return pollLoopPromise;
+}
+
+if (!window.__FAITHCHESS_TEST__) {
+  void requestUpdate();
+  setInterval(() => {
+    void requestUpdate();
+  }, 3000);
+}
+
+if (window.__FAITHCHESS_TEST__) {
+  window.__faithChessGridTest = Object.freeze({
+    parsePlayers,
+    parseMoveTokens,
+    requestUpdate,
+    getState: () => ({
+      pollGeneration,
+      pendingRefreshes,
+      pieceTheme: gridPieceTheme,
+      games: instances.map((instance) => ({
+        id: instance.id,
+        gameId: instance.gameId,
+        lastMovesLength: instance.lastMovesLength,
+      })),
+    }),
+  });
+}

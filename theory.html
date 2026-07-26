@@ -21,7 +21,8 @@
   --accent2:   #7ea8c4;
   --light-sq:  #6b7a8d;
   --dark-sq:   #4a5568;
-  --sq:        56px;
+  --preferred-sq: 56px;
+  --sq:        min(var(--preferred-sq), 56px);
   --blunder:   #e05555;
   --mistake:   #e08833;
   --inaccuracy:#d4b820;
@@ -47,11 +48,11 @@ header { background: var(--bg2); border-bottom: 1px solid var(--border); padding
 .hbtn.primary-btn:hover { background: rgba(165,148,192,.18); }
 
 /* Layout */
-.app { display: grid; grid-template-columns: 230px 1fr; min-height: calc(100vh - 54px); }
-.app.editor-open { grid-template-columns: 230px 1fr var(--editor-w); }
+.app { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: calc(100vh - 54px); }
+.app.editor-open { grid-template-columns: 230px minmax(0, 1fr) var(--editor-w); }
 
 /* Nav */
-nav { background: var(--bg2); border-right: 1px solid var(--border); padding: 12px 0 16px; position: sticky; top: 54px; height: calc(100vh - 54px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+nav { width: 100%; min-width: 0; background: var(--bg2); border-right: 1px solid var(--border); padding: 12px 0 16px; position: sticky; top: 54px; height: calc(100vh - 54px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
 .nav-label { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted2); padding: 0 16px; margin-bottom: 6px; margin-top: 10px; display: block; font-weight: 600; }
 
 /* Tree nodes */
@@ -78,7 +79,7 @@ nav { background: var(--bg2); border-right: 1px solid var(--border); padding: 12
 .tree-row.active-leaf .tree-label { color: var(--accent); }
 
 /* Main */
-main { padding: 36px 48px; max-width: 1400px; }
+main { width: 100%; min-width: 0; padding: 36px 48px; max-width: 1400px; }
 
 /* Entry */
 .entry { margin-bottom: 64px; scroll-margin-top: 74px; }
@@ -266,7 +267,14 @@ main { padding: 36px 48px; max-width: 1400px; }
 .block-line,
 .block-tabs,
 .tab-panel {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow: visible;
+}
+.study-layout,
+.study-layout > * {
+  min-width: 0;
 }
 .study-layout > .move-panel {
   align-self: stretch;
@@ -939,14 +947,14 @@ body.brilliant-page-open > footer {
 
 /* ── Large screen expansion ─────────────────────────────────── */
 @media (min-width: 1600px) {
-  :root { --sq: 64px; }
+  :root { --sq: min(var(--preferred-sq), 64px); }
   main { padding: 40px 64px; }
   .block-text { max-width: 780px; }
   .block-text-wrap { max-width: 780px; }
   .move-panel { flex-basis: 520px; max-width: 1200px; }
 }
 @media (min-width: 1920px) {
-  :root { --sq: 70px; }
+  :root { --sq: min(var(--preferred-sq), 70px); }
   main { padding: 44px 80px; max-width: 1600px; }
   .block-text { max-width: 860px; }
   .block-text-wrap { max-width: 860px; }
@@ -954,20 +962,20 @@ body.brilliant-page-open > footer {
 
 /* ── Mid-size desktop scaling ───────────────────────────────── */
 @media (min-width: 769px) and (max-width: 1280px) {
-  :root { --sq: 50px; }
+  :root { --sq: min(var(--preferred-sq), 50px); }
 }
 @media (min-width: 769px) and (max-width: 1100px) {
-  :root { --sq: 44px; --editor-w: 400px; }
-  .app { grid-template-columns: 190px 1fr; }
-  .app.editor-open { grid-template-columns: 190px 1fr var(--editor-w); }
+  :root { --sq: min(var(--preferred-sq), 44px); --editor-w: 400px; }
+  .app { grid-template-columns: 190px minmax(0, 1fr); }
+  .app.editor-open { grid-template-columns: 190px minmax(0, 1fr) var(--editor-w); }
   nav { width: 190px; }
   main { padding: 24px 28px; }
 }
 
 @media (max-width: 768px) {
-  :root { --sq: 42px; --editor-w: 100vw; }
+  :root { --sq: min(var(--preferred-sq), 42px, calc(12.5vw - 5.75px)); --editor-w: 100vw; }
   .site-sub { display: none; }
-  .app, .app.editor-open { grid-template-columns: 1fr; }
+  .app, .app.editor-open { grid-template-columns: minmax(0, 1fr); }
   nav { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; padding: 8px 12px; overflow-x: auto; overflow-y: visible; top: 0; }
   .nav-label { display: none; }
   .nav-item { width: auto; border-left: none; border-bottom: 2px solid transparent; padding: 6px 10px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
@@ -1004,7 +1012,7 @@ body.brilliant-page-open > footer {
   nav { height: auto; }
 }
 @media (max-width: 400px) {
-  :root { --sq: 36px; }
+  :root { --sq: min(var(--preferred-sq), 36px, calc(12.5vw - 5.75px)); }
   #new-btn { display: none; }
 }
 /* ═══════════════ MAP OVERLAY ═══════════════════════════════════ */
@@ -1311,7 +1319,7 @@ body.brilliant-page-open > footer {
     <div style="padding:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);text-align:center;">
       <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px;">Want to contribute?</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">Make your edits, save the JSON, and send it in. All contributors get credited here.</div>
-      <a href="https://github.com/veefs/chess-notes-" target="_blank" class="hbtn" style="text-decoration:none;display:inline-flex;">View on GitHub</a>
+      <a href="https://github.com/veefs/chess-notes-" target="_blank" rel="noopener noreferrer" class="hbtn" style="text-decoration:none;display:inline-flex;">View on GitHub</a>
     </div>
   </div>
 </div>
@@ -1365,7 +1373,6 @@ document.getElementById('file-inp').addEventListener('change', e => {
 });
 
 // ─── Save / Submit ───────────────────────────────────────────────────
-const WEBHOOK_URL = 'https://discord.com/api/webhooks/1495145721655988436/VmGzeuR-VYRH21adIMPCk3koKguuUcE1v0PtAEsA96ZT0xnHt9cjFMNQBr3WV6VNN4h9';
 
 function doLocalSave() {
   const blob = new Blob([JSON.stringify(LINES, null, 2)], {type: 'application/json'});
@@ -1383,10 +1390,18 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
 
 // ─── Chess Engine ────────────────────────────────────────────────────
-const BASE='https://lichess1.org/assets/piece/cburnett/';
+const BASE='pieces/cburnett/';
 function mkPS(){const sq=getSq();return{wK:`<img src="${BASE}wK.svg" width="${sq}" height="${sq}">`,wQ:`<img src="${BASE}wQ.svg" width="${sq}" height="${sq}">`,wR:`<img src="${BASE}wR.svg" width="${sq}" height="${sq}">`,wB:`<img src="${BASE}wB.svg" width="${sq}" height="${sq}">`,wN:`<img src="${BASE}wN.svg" width="${sq}" height="${sq}">`,wP:`<img src="${BASE}wP.svg" width="${sq}" height="${sq}">`,bK:`<img src="${BASE}bK.svg" width="${sq}" height="${sq}">`,bQ:`<img src="${BASE}bQ.svg" width="${sq}" height="${sq}">`,bR:`<img src="${BASE}bR.svg" width="${sq}" height="${sq}">`,bB:`<img src="${BASE}bB.svg" width="${sq}" height="${sq}">`,bN:`<img src="${BASE}bN.svg" width="${sq}" height="${sq}">`,bP:`<img src="${BASE}bP.svg" width="${sq}" height="${sq}">`};}
 const PS=mkPS();
-function getSq(){return parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sq'))||56;}
+function getSq(){
+  const probe=document.createElement('span');
+  probe.setAttribute('aria-hidden','true');
+  probe.style.cssText='position:fixed;visibility:hidden;pointer-events:none;width:var(--sq);height:0';
+  document.body.appendChild(probe);
+  const size=probe.getBoundingClientRect().width;
+  probe.remove();
+  return size||56;
+}
 function f2b(fen){return fen.split(' ')[0].split('/').map(row=>{const r=[];for(const ch of row){if('12345678'.includes(ch))for(let i=0;i<+ch;i++)r.push(null);else r.push((ch===ch.toUpperCase()?'w':'b')+ch.toUpperCase());}return r;});}
 function applyMv(board,san,turn){const b=board.map(r=>[...r]);let s=san.replace(/[+#!?]/g,'');if(s==='O-O'||s==='0-0'){const rk=turn==='w'?7:0;b[rk][4]=null;b[rk][7]=null;b[rk][6]=turn+'K';b[rk][5]=turn+'R';return b;}if(s==='O-O-O'||s==='0-0-0'){const rk=turn==='w'?7:0;b[rk][4]=null;b[rk][0]=null;b[rk][2]=turn+'K';b[rk][3]=turn+'R';return b;}let promo=null;if(s.includes('=')){promo=turn+s.split('=')[1].toUpperCase();s=s.split('=')[0];}const isCap=s.includes('x');s=s.replace('x','');const df=s.slice(-2,-1).charCodeAt(0)-97,dr=8-parseInt(s.slice(-1));const pc=s[0]===s[0].toUpperCase()&&!'abcdefgh'.includes(s[0])?s[0]:'P';const piece=turn+pc,hint=s.slice(pc==='P'?0:1,-2).replace('x','');let sR=-1,sF=-1;for(let r=0;r<8&&sR===-1;r++)for(let f=0;f<8&&sR===-1;f++){if(b[r][f]!==piece)continue;if(hint){if(!isNaN(hint)){if(r!==8-parseInt(hint))continue}else{if(f!==hint.charCodeAt(0)-97)continue}}if(canR(b,r,f,dr,df,piece,turn,isCap)){sR=r;sF=f;}}if(sR===-1)return b;if(piece[1]==='P'&&isCap&&!b[dr][df])b[turn==='w'?dr+1:dr-1][df]=null;b[dr][df]=promo||piece;b[sR][sF]=null;return b;}
 function canR(board,r,f,dr,df,piece,turn,isCap){const type=piece[1],dr_=dr-r,df_=df-f;if(type==='P'){const dir=turn==='w'?-1:1;if(!isCap){if(df_!==0)return false;if(dr_===dir&&!board[dr][df])return true;const sr=turn==='w'?6:1;if(r===sr&&dr_===2*dir&&!board[r+dir][f]&&!board[dr][df])return true;}else return dr_===dir&&Math.abs(df_)===1;return false;}if(type==='N')return(Math.abs(dr_)===2&&Math.abs(df_)===1)||(Math.abs(dr_)===1&&Math.abs(df_)===2);if(type==='K')return Math.abs(dr_)<=1&&Math.abs(df_)<=1;if(type==='R'){if(dr_!==0&&df_!==0)return false;return clr(board,r,f,dr,df);}if(type==='B'){if(Math.abs(dr_)!==Math.abs(df_))return false;return clr(board,r,f,dr,df);}if(type==='Q'){if(dr_!==0&&df_!==0&&Math.abs(dr_)!==Math.abs(df_))return false;return clr(board,r,f,dr,df);}return false;}
@@ -1681,7 +1696,10 @@ function buildEditorBoardInput(block,sanBox,refreshComments,onEngineLineChange){
   function cloneBoard(board){ return board.map(row=>row.slice()); }
   function sameBoard(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
   function sqName(r,f){ return String.fromCharCode(97+f)+(8-r); }
-  function sqPx(){ return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sq')) || 56; }
+  function sqPx(){
+    const renderedSquare = document.querySelector('.sq')?.getBoundingClientRect().width;
+    return renderedSquare || getSq();
+  }
   function boardToDisplay(r,f){
     return boardFlipped ? { r: 7 - r, f: 7 - f } : { r, f };
   }
@@ -3636,7 +3654,7 @@ function buildPracticeRoom(seedMoves, label, userColor, closeRoom){
     if(color === 'w') addCancel();
 
     if(getComputedStyle(gw).position === 'static') gw.style.position = 'relative';
-    const size = Math.min(gw.clientWidth || 0, gw.clientHeight || 0) || ((parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sq')) || 56) * 8);
+    const size = Math.min(gw.clientWidth || 0, gw.clientHeight || 0) || (getSq() * 8);
     const sq = size / 8;
     const overlayHeight = sq * 4 + sq * 0.72;
     const vis = flipped ? { r: 7 - targetSq.r, f: 7 - targetSq.f } : { r: targetSq.r, f: targetSq.f };
@@ -5270,7 +5288,27 @@ function buildEntry(entry, idx, tabTree){
 
   const wrap=document.createElement('div');wrap.className='entry';wrap.id=entry.id;
   const hdr=document.createElement('div');hdr.className='entry-header';
-  hdr.innerHTML=`<div class="entry-eyebrow">ENTRY ${String(idx+1).padStart(2,'0')}</div><div class="entry-title">${esc(entry.title)}</div><div class="entry-meta"><span>${entry.date||''}</span>${(entry.tags||[]).map(t=>`<span class="tag ${t}">${t}</span>`).join('')}</div>`;
+  const eyebrow=document.createElement('div');
+  eyebrow.className='entry-eyebrow';
+  eyebrow.textContent=`ENTRY ${String(idx+1).padStart(2,'0')}`;
+  const title=document.createElement('div');
+  title.className='entry-title';
+  title.textContent=String(entry.title||'');
+  const meta=document.createElement('div');
+  meta.className='entry-meta';
+  const date=document.createElement('span');
+  date.textContent=String(entry.date||'');
+  meta.appendChild(date);
+  const styledTagClasses=new Set(['opening','tactics','endgame']);
+  (Array.isArray(entry.tags) ? entry.tags : []).forEach(rawTag=>{
+    const tagText=String(rawTag||'');
+    const tagClass=tagText.trim().toLowerCase();
+    const tag=document.createElement('span');
+    tag.className=styledTagClasses.has(tagClass) ? `tag ${tagClass}` : 'tag';
+    tag.textContent=tagText;
+    meta.appendChild(tag);
+  });
+  hdr.append(eyebrow,title,meta);
   wrap.appendChild(hdr); buildBlocks(entry.blocks||[], wrap, entry); return wrap;
 }
 
@@ -6531,10 +6569,19 @@ function renderEcoList(entries, query=''){
   filtered.slice(0, 250).forEach(group => {
     const card = document.createElement('div');
     card.style.cssText = 'padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;gap:10px;';
-    const title = group.name ? `${group.code} � ${group.name}` : group.code;
+    const title = group.name ? `${group.code} — ${group.name}` : group.code;
     const openingCount = buildEcoEntriesForGroup(group).length;
     const countLabel = `${openingCount} opening${openingCount === 1 ? '' : 's'}`;
-    card.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text2);line-height:1.4;">${title}</div><div style="font-size:11px;color:var(--muted);">${countLabel}</div><div style="font-size:12px;color:var(--muted);line-height:1.7;">Generate opening entries for this ECO code and open the first page.</div>`;
+    const titleEl = document.createElement('div');
+    titleEl.style.cssText = 'font-size:13px;font-weight:700;color:var(--text2);line-height:1.4;';
+    titleEl.textContent = title;
+    const countEl = document.createElement('div');
+    countEl.style.cssText = 'font-size:11px;color:var(--muted);';
+    countEl.textContent = countLabel;
+    const descriptionEl = document.createElement('div');
+    descriptionEl.style.cssText = 'font-size:12px;color:var(--muted);line-height:1.7;';
+    descriptionEl.textContent = 'Generate opening entries for this ECO code and open the first page.';
+    card.append(titleEl, countEl, descriptionEl);
     const actions = document.createElement('div');
     actions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
     const addBtn = document.createElement('button');
@@ -6595,7 +6642,7 @@ function loadSettings(){
 function saveSettings(s){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 
 function applySettings(s){
-  document.documentElement.style.setProperty('--sq', s.sq + 'px');
+  document.documentElement.style.setProperty('--preferred-sq', s.sq + 'px');
   document.documentElement.style.setProperty('--text-size', s.textSize + 'px');
 }
 
@@ -6631,56 +6678,41 @@ document.getElementById('settings-btn').addEventListener('click', openSettings);
 applySettings(loadSettings());
 </script>
 
-<!-- SAVE / SUBMIT MODAL -->
-<div id="save-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;">
+<!-- SAVE / CONTRIBUTE MODAL -->
+<div id="save-modal" role="dialog" aria-modal="true" aria-labelledby="save-modal-title" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;">
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;width:min(420px,90vw);box-shadow:0 20px 60px rgba(0,0,0,.6);">
-    <div style="font-size:16px;font-weight:700;color:var(--text2);margin-bottom:4px;">Save JSON</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:22px;">Download locally or send to the FaithChess team for review.</div>
+    <div id="save-modal-title" style="font-size:16px;font-weight:700;color:var(--text2);margin-bottom:4px;">Save theory JSON</div>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 22px;">Download your work locally. To share it with the project, attach the JSON to a GitHub issue or pull request.</p>
 
-    <button id="save-modal-local" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:16px;background:rgba(165,148,192,.15);border:1px solid var(--accent);border-radius:var(--radius);color:var(--accent);font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6v7a1 1 0 001 1h10a1 1 0 001-1V6"/><polyline points="5 2 5 7 11 7 11 2"/><polyline points="11 2 14 2 14 6 2 6 2 2 5 2"/></svg>
+    <button id="save-modal-local" type="button" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:12px;background:rgba(165,148,192,.15);border:1px solid var(--accent);border-radius:var(--radius);color:var(--accent);font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;">
       Save locally
     </button>
 
-    <textarea id="save-modal-note" placeholder="Optional: describe what you added or changed…" style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:9px 12px;font-size:13px;font-family:inherit;resize:vertical;min-height:68px;outline:none;margin-bottom:10px;"></textarea>
+    <a href="https://github.com/veefs/chess-notes-/issues/new" target="_blank" rel="noopener noreferrer" style="width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);font-size:13px;font-family:inherit;font-weight:600;text-decoration:none;">
+      Open GitHub contribution page
+    </a>
 
-    <button id="save-modal-submit" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:14px;background:rgba(88,101,242,.12);border:1px solid rgba(88,101,242,.45);border-radius:var(--radius);color:#8b9cf4;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 3a1 1 0 00-1-1H4a1 1 0 00-1 1v7a1 1 0 001 1h7l3 3V3z"/></svg>
-      Submit for review
-    </button>
-
-    <button id="save-modal-cancel" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;">Cancel</button>
+    <button id="save-modal-cancel" type="button" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;">Cancel</button>
   </div>
 </div>
 
 <script>
+const saveModal = document.getElementById('save-modal');
+function closeSaveModal() {
+  saveModal.style.display = 'none';
+}
 document.getElementById('save-modal-local').addEventListener('click', function() {
-  document.getElementById('save-modal').style.display = 'none';
+  closeSaveModal();
   doLocalSave();
 });
-document.getElementById('save-modal-cancel').addEventListener('click', function() {
-  document.getElementById('save-modal').style.display = 'none';
-  document.getElementById('save-modal-note').value = '';
+document.getElementById('save-modal-cancel').addEventListener('click', closeSaveModal);
+saveModal.addEventListener('click', function(event) {
+  if (event.target === saveModal) closeSaveModal();
 });
-document.getElementById('save-modal-submit').addEventListener('click', async function() {
-  var note = document.getElementById('save-modal-note').value.trim();
-  var fd = new FormData();
-  fd.append('file', new File([JSON.stringify(LINES, null, 2)], currentFilename, {type:'application/json'}));
-  fd.append('payload_json', JSON.stringify({
-    username: 'FaithChess Submissions',
-    content: note ? ('**New submission**\n' + note) : '**New submission** _(no note)_'
-  }));
-  var btn = document.getElementById('save-modal-submit');
-  btn.textContent = 'Sending…'; btn.disabled = true;
-  try {
-    var res = await fetch(WEBHOOK_URL, {method:'POST', body:fd});
-    if (res.ok) {
-      document.getElementById('save-modal').style.display = 'none';
-      document.getElementById('save-modal-note').value = '';
-      toast('Submitted for review!', 'ok');
-    } else { toast('Discord error ' + res.status, 'err'); }
-  } catch(e) { toast('Network error — save locally instead', 'err'); }
-  btn.textContent = 'Submit for review'; btn.disabled = false;
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape' && saveModal.style.display !== 'none') {
+    closeSaveModal();
+  }
 });
 </script>
 <script src="settings.js"></script>
