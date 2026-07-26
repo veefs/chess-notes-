@@ -85,6 +85,16 @@ function resolveGameTimeControl(gameData) {
   return normalizeTimeControl(gameData.timeControl);
 }
 
+function withResolvedGameTimeControl(gameData) {
+  const timeControl = resolveGameTimeControl(gameData);
+  if (!timeControl) return null;
+  if (gameData.timeControl === timeControl) return gameData;
+  return {
+    ...gameData,
+    timeControl,
+  };
+}
+
 function safeAvatarUrl(value, baseHref = window.location.href) {
   if (typeof value !== "string" || value.length > 2048) return null;
   const normalized = value.trim();
@@ -401,33 +411,42 @@ function planQueueMatch(queue, myUid) {
 }
 
 function clockFromGameData(data, now = Date.now()) {
-  if (!data?.timeControl) return null;
+  const normalizedData = withResolvedGameTimeControl(data);
+  if (!normalizedData) return null;
 
-  const fallbackSeconds = TIME_CONTROLS[data.timeControl]?.seconds ?? 600;
-  const storedWhiteSeconds = Number.isFinite(data.whiteTime)
-    ? data.whiteTime
+  const timeControl = normalizedData.timeControl;
+  const fallbackSeconds = TIME_CONTROLS[timeControl].seconds;
+  const storedWhiteSeconds = Number.isFinite(normalizedData.whiteTime)
+    ? normalizedData.whiteTime
     : fallbackSeconds;
-  const storedBlackSeconds = Number.isFinite(data.blackTime)
-    ? data.blackTime
+  const storedBlackSeconds = Number.isFinite(normalizedData.blackTime)
+    ? normalizedData.blackTime
     : fallbackSeconds;
-  const whiteTimeMs = Number.isFinite(data.whiteTimeMs)
-    ? Math.max(0, data.whiteTimeMs)
+  const whiteTimeMs = Number.isFinite(normalizedData.whiteTimeMs)
+    ? Math.max(0, normalizedData.whiteTimeMs)
     : Math.max(0, storedWhiteSeconds) * 1000;
-  const blackTimeMs = Number.isFinite(data.blackTimeMs)
-    ? Math.max(0, data.blackTimeMs)
+  const blackTimeMs = Number.isFinite(normalizedData.blackTimeMs)
+    ? Math.max(0, normalizedData.blackTimeMs)
     : Math.max(0, storedBlackSeconds) * 1000;
-  const moves = normalizeMoves(data.moves);
-  const activeColor = data.activeColor === "black" || data.activeColor === "white"
-    ? data.activeColor
+  const moves = normalizeMoves(normalizedData.moves);
+  const activeColor = normalizedData.activeColor === "black" ||
+    normalizedData.activeColor === "white"
+    ? normalizedData.activeColor
     : (moves.length % 2 === 0 ? "white" : "black");
-  const candidateTimestamp = Number.isFinite(data.clockUpdatedAt)
-    ? data.clockUpdatedAt
-    : data.createdAt;
+  const candidateTimestamp = Number.isFinite(normalizedData.clockUpdatedAt)
+    ? normalizedData.clockUpdatedAt
+    : normalizedData.createdAt;
   const updatedAt = Number.isFinite(candidateTimestamp)
     ? candidateTimestamp
     : now;
 
-  return { whiteTimeMs, blackTimeMs, activeColor, updatedAt };
+  return {
+    whiteTimeMs,
+    blackTimeMs,
+    activeColor,
+    updatedAt,
+    timeControl,
+  };
 }
 
 function monotonicGameTime(data, now = Date.now()) {
@@ -470,6 +489,7 @@ function withClockFields(data, clock) {
     blackTime: Math.ceil(clock.blackTimeMs / 1000),
     activeColor: clock.activeColor,
     clockUpdatedAt: clock.updatedAt,
+    timeControl: clock.timeControl,
   };
 }
 
@@ -506,6 +526,7 @@ function transitionGameState(current, command, now = Date.now()) {
     clockFromGameData(current, effectiveNow),
     effectiveNow
   );
+  if (!clock) return null;
 
   if (command.type === "move") {
     const remoteMoves = normalizeMoves(current.moves);
@@ -517,22 +538,20 @@ function transitionGameState(current, command, now = Date.now()) {
       return null;
     }
 
-    if (clock) {
-      const activeTime = clock.activeColor === "white"
-        ? clock.whiteTimeMs
-        : clock.blackTimeMs;
-      if (activeTime <= 0) {
-        return finishedGameState(
-          current,
-          "timeout",
-          oppositeColor(clock.activeColor),
-          effectiveNow,
-          clock
-        );
-      }
-      clock.activeColor = oppositeColor(clock.activeColor);
-      clock.updatedAt = effectiveNow;
+    const activeTime = clock.activeColor === "white"
+      ? clock.whiteTimeMs
+      : clock.blackTimeMs;
+    if (activeTime <= 0) {
+      return finishedGameState(
+        current,
+        "timeout",
+        oppositeColor(clock.activeColor),
+        effectiveNow,
+        clock
+      );
     }
+    clock.activeColor = oppositeColor(clock.activeColor);
+    clock.updatedAt = effectiveNow;
 
     return withClockFields({
       ...current,
@@ -658,15 +677,17 @@ function renderClockTick(now = Date.now()) {
 
 function syncClockSnapshot(data) {
   const nextClock = clockFromGameData(data);
-  if (!nextClock) return;
+  if (!nextClock) return false;
   clockSnapshot = nextClock;
   renderClockTick();
+  return true;
 }
 
 function startTimers(data) {
-  syncClockSnapshot(data);
+  if (!syncClockSnapshot(data)) return false;
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(renderClockTick, 250);
+  return true;
 }
 
 function advanceLocalClock(nextActiveColor) {
@@ -811,7 +832,7 @@ function onDrop(source, target) {
   pushMove().catch(() => {
     if (latestGameData) {
       reconcileGameMoves(latestGameData, false);
-      if (latestGameData.timeControl) syncClockSnapshot(latestGameData);
+      syncClockSnapshot(latestGameData);
     }
     setQueueStatus("Move could not be confirmed. Reconnecting...");
   });
@@ -851,7 +872,7 @@ async function pushMove() {
     handleFinishedGame(data);
   } else if (!transaction.committed && data) {
     reconcileGameMoves(data, false);
-    if (data.timeControl) syncClockSnapshot(data);
+    syncClockSnapshot(data);
   }
 
   return transaction.committed;
@@ -872,7 +893,7 @@ async function requestGameFinish(reason, winner = null) {
 
     if (data?.status === "finished") {
       handleFinishedGame(data);
-    } else if (data?.timeControl) {
+    } else if (data) {
       syncClockSnapshot(data);
     }
     return transaction.committed;
@@ -891,7 +912,7 @@ function handleFinishedGame(data) {
   finishTransitionPending = false;
   clearInterval(timerInterval);
 
-  if (data.timeControl) syncClockSnapshot(data);
+  syncClockSnapshot(data);
 
   const reason = FINISH_REASONS.has(data.finishReason)
     ? data.finishReason
@@ -934,6 +955,19 @@ let currentBlackData = null;
 let latestGameData = null;
 let timersStarted = false;
 
+function syncClockFromGameSnapshot(gameData) {
+  const normalizedData = withResolvedGameTimeControl(gameData);
+  if (!normalizedData) return false;
+
+  if (!timersStarted) {
+    if (!startTimers(normalizedData)) return false;
+    timersStarted = true;
+  } else {
+    if (!syncClockSnapshot(normalizedData)) return false;
+  }
+  return true;
+}
+
 function listenToGame(gameId) {
   const safeGameId = normalizeFirebaseKey(gameId);
   const safeUid = normalizeFirebaseKey(window.myUid);
@@ -947,8 +981,13 @@ function listenToGame(gameId) {
       const db = window.firebaseDb;
 
       onValue(ref(db, `games/${safeGameId}`), (snap) => {
-        const data = snap.val();
-        if (!data) return;
+        const storedData = snap.val();
+        if (!storedData) return;
+        const data = withResolvedGameTimeControl(storedData);
+        if (!data) {
+          setQueueStatus("Game time control could not be validated.");
+          return;
+        }
         if (!["playing", "finished"].includes(data.status) ||
             colorForUser(data, safeUid) !== myColor) {
           setQueueStatus("Game access could not be validated.");
@@ -975,13 +1014,9 @@ function listenToGame(gameId) {
           return;
         }
 
-        if (data.timeControl) {
-          if (!timersStarted) {
-            timersStarted = true;
-            startTimers(data);
-          } else {
-            syncClockSnapshot(data);
-          }
+        if (!syncClockFromGameSnapshot(data)) {
+          setQueueStatus("Game clock could not be validated.");
+          return;
         }
 
         // Upgrade legacy terminal flags through the guarded state transition.
@@ -1586,9 +1621,9 @@ async function createGame(
 
 async function listenForGame(uid, tc, options = {}) {
   const safeUid = normalizeFirebaseKey(uid);
-  const fallbackTimeControl = normalizeTimeControl(tc);
-  if (!safeUid) {
-    throw new Error("Queue user id is invalid.");
+  const queueTimeControl = normalizeTimeControl(tc);
+  if (!safeUid || !queueTimeControl) {
+    throw new Error("Queue user id or time control is invalid.");
   }
 
   const firebaseApi = options.firebaseApi ||
@@ -1622,8 +1657,7 @@ async function listenForGame(uid, tc, options = {}) {
           return;
         }
 
-        const gameTimeControl = normalizeTimeControl(gameData.timeControl) ||
-          fallbackTimeControl;
+        const gameTimeControl = resolveGameTimeControl(gameData);
         if (!gameTimeControl) {
           setQueueStatus("Matched game time control could not be validated.");
           return;

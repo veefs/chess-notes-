@@ -804,6 +804,52 @@ check("Firebase readiness polling is bounded and recoverable", () => {
   assert.equal(callbackCount, 1);
 });
 
+check("legacy snapshots start a rapid clock and reject forged controls", () => {
+  const now = Date.now();
+  vm.runInContext(
+    "timersStarted = false; clockSnapshot = null; timerInterval = null;" +
+    " gameOverHandled = false; finishTransitionPending = false;",
+    context
+  );
+  const legacySnapshot = {
+    status: "playing",
+    whiteTime: 600,
+    blackTime: 600,
+    activeColor: "white",
+    clockUpdatedAt: now,
+    createdAt: now,
+    moves: [],
+  };
+
+  assert.equal(context.syncClockFromGameSnapshot(legacySnapshot), true);
+  const startedState = vm.runInContext(
+    "({ timersStarted, timerInterval," +
+    " timeControl: clockSnapshot?.timeControl," +
+    " whiteTimeMs: clockSnapshot?.whiteTimeMs })",
+    context
+  );
+  assert.equal(startedState.timersStarted, true);
+  assert.equal(startedState.timerInterval, 1);
+  assert.equal(startedState.timeControl, "rapid");
+  assert.equal(startedState.whiteTimeMs, 600_000);
+
+  vm.runInContext(
+    "timersStarted = false; clockSnapshot = null; timerInterval = null;",
+    context
+  );
+  assert.equal(
+    context.syncClockFromGameSnapshot({
+      ...legacySnapshot,
+      timeControl: "forged-control",
+    }),
+    false
+  );
+  assert.equal(
+    vm.runInContext("timersStarted || clockSnapshot !== null", context),
+    false
+  );
+});
+
 check("timeout and move transitions are guarded by canonical game state", () => {
   const gameState = {
     status: "playing",
@@ -883,6 +929,35 @@ check("timeout and move transitions are guarded by canonical game state", () => 
   );
   assert.equal(skewedMove.clockUpdatedAt, 10_000);
   assert.equal(skewedMove.whiteTimeMs, 1000);
+
+  const legacyGameState = { ...gameState };
+  delete legacyGameState.timeControl;
+  const upgradedLegacyMove = context.transitionGameState(
+    legacyGameState,
+    {
+      type: "move",
+      previousMoves: [],
+      moves: ["e4"],
+      fen: "after-e4",
+    },
+    9_000
+  );
+  assert.equal(upgradedLegacyMove.timeControl, "rapid");
+  assert.equal(upgradedLegacyMove.clockUpdatedAt, 10_000);
+  assert.equal(upgradedLegacyMove.whiteTimeMs, 1000);
+  assert.equal(
+    context.transitionGameState(
+      { ...gameState, timeControl: "forged-control" },
+      {
+        type: "move",
+        previousMoves: [],
+        moves: ["e4"],
+        fen: "after-e4",
+      },
+      10_500
+    ),
+    null
+  );
 
   const skewedFinish = context.transitionGameState(
     gameState,
