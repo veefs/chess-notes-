@@ -184,7 +184,7 @@
 <script type="module" src="challenges.js"></script>
 
 <script type="module">
-  import { getDatabase, ref, get, set, query, orderByChild, equalTo }
+  import { getDatabase, ref, get, set, update, query, orderByChild, equalTo }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
   import { getAuth, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -218,6 +218,35 @@
     mod: { label: "Mod", cls: "title-mod" },
   };
 
+  const RESERVED_FIREBASE_SEGMENTS = new Set([
+    "__proto__",
+    "constructor",
+    "prototype",
+  ]);
+
+  function isSafeFirebaseSegment(value) {
+    return typeof value === "string"
+      && value.length > 0
+      && value.length <= 128
+      && value.trim() === value
+      && !RESERVED_FIREBASE_SEGMENTS.has(value)
+      && !/[.#$/\[\]\u0000-\u001F\u007F]/.test(value);
+  }
+
+  function displayName(value, fallback = "Unknown") {
+    return typeof value === "string" && value.trim()
+      ? value.trim().slice(0, 80)
+      : fallback;
+  }
+
+  function appendTextElement(parent, className, text, tagName = "div") {
+    const element = document.createElement(tagName);
+    element.className = className;
+    element.textContent = text;
+    parent.appendChild(element);
+    return element;
+  }
+
   onAuthStateChanged(auth, async user => {
     if (!user) { window.location.href = "login.html"; return; }
 
@@ -225,6 +254,13 @@
       // ── Viewing someone else's profile ──────────────────────────────────
       document.getElementById("otherBanner").classList.remove("hidden");
       document.getElementById("friendsSection").style.display = "none";
+
+      if (!isSafeFirebaseSegment(viewUsername.toLowerCase())) {
+        document.getElementById("usernameEl").textContent = "User not found";
+        document.getElementById("gameList").innerHTML =
+          `<div class="empty-state">This user doesn't exist.</div>`;
+        return;
+      }
 
       const uidSnap = await get(ref(db, `usernames/${viewUsername.toLowerCase()}`));
       if (!uidSnap.exists()) {
@@ -235,6 +271,12 @@
       }
 
       const targetUid = uidSnap.val();
+      if (!isSafeFirebaseSegment(targetUid)) {
+        document.getElementById("usernameEl").textContent = "User not found";
+        document.getElementById("gameList").innerHTML =
+          `<div class="empty-state">This user doesn't exist.</div>`;
+        return;
+      }
       if (targetUid === user.uid) { window.location.href = "profile.html"; return; }
 
       const [usernameSnap, ratingSnap, winsSnap, lossesSnap, drawsSnap, titleSnap] =
@@ -265,12 +307,23 @@
       btn.onclick = async () => {
         btn.disabled    = true;
         btn.textContent = "⏳ Sending...";
-        await window.sendChallenge(targetUid, targetUsername);
-        btn.textContent = "✓ Challenge Sent";
-        setTimeout(() => {
+        let sent = false;
+        try {
+          sent = typeof window.sendChallenge === "function"
+            && await window.sendChallenge(targetUid, targetUsername);
+        } catch {
+          sent = false;
+        }
+        if (sent) {
+          btn.textContent = "✓ Challenge Sent";
+          setTimeout(() => {
+            btn.disabled    = false;
+            btn.textContent = "⚔ Challenge";
+          }, 3000);
+        } else {
           btn.disabled    = false;
           btn.textContent = "⚔ Challenge";
-        }, 3000);
+        }
       };
 
     } else {
@@ -304,7 +357,7 @@
 
   // ── Render profile card ─────────────────────────────────────────────────────
   function renderProfile(data) {
-    const username = data.username || "Unknown";
+    const username = displayName(data.username);
     const rating   = data.rating  ?? 800;
     const wins     = data.wins    ?? 0;
     const losses   = data.losses  ?? 0;
@@ -317,11 +370,13 @@
     document.title = `FaithChess — ${username}`;
 
     const titleEl = document.getElementById("titleEl");
+    titleEl.replaceChildren();
     if (data.title && TITLES[data.title]) {
       const t = TITLES[data.title];
-      titleEl.innerHTML = `<span class="title-badge ${t.cls}">${t.label}</span>`;
-    } else {
-      titleEl.innerHTML = "";
+      const badge = document.createElement("span");
+      badge.className = `title-badge ${t.cls}`;
+      badge.textContent = t.label;
+      titleEl.appendChild(badge);
     }
 
     document.getElementById("ratingEl").textContent    = rating;
@@ -345,6 +400,10 @@
 
   async function loadGameHistory(uid) {
     const listEl = document.getElementById("gameList");
+    if (!isSafeFirebaseSegment(uid)) {
+      listEl.textContent = "Game history is unavailable.";
+      return;
+    }
 
     let savedHistory = null;
     try {
@@ -454,7 +513,7 @@
   // ── Render game list ────────────────────────────────────────────────────────
   function renderGameList(entries) {
     const listEl = document.getElementById("gameList");
-    listEl.innerHTML = "";
+    listEl.replaceChildren();
 
     if (!entries.length) {
       listEl.innerHTML = `<div class="empty-state">No games yet. <a href="play.html" style="color:var(--accent)">Play now →</a></div>`;
@@ -462,19 +521,33 @@
     }
 
     for (const g of entries) {
+      const result = ["win", "loss", "draw"].includes(g.result) ? g.result : "draw";
+      const color = g.myColor === "black" ? "black" : "white";
+      const opponent = displayName(g.opponentUsername);
+      const moveCount = Number.isFinite(Number(g.moveCount))
+        ? Math.max(0, Number(g.moveCount))
+        : "?";
+      const playedAtValue = Number(g.playedAt);
+      const playedAt = Number.isFinite(playedAtValue) && Math.abs(playedAtValue) <= 8.64e15
+        ? new Date(playedAtValue).toLocaleDateString()
+        : "";
+      const ratingChange = Number.isFinite(Number(g.ratingChange))
+        ? `${Number(g.ratingChange) >= 0 ? "+" : ""}${Number(g.ratingChange)}`
+        : "—";
+
       const entry = document.createElement("div");
-      entry.className = `game-entry ${g.result || "draw"}`;
-      entry.innerHTML = `
-        <div class="game-result">${g.result || "draw"}</div>
-        <div>
-          <div class="game-opponent">vs ${g.opponentUsername || "Unknown"}</div>
-          <div class="game-meta">${g.myColor === "white" ? "White" : "Black"} · ${g.playedAt ? new Date(g.playedAt).toLocaleDateString() : ""}</div>
-        </div>
-        <div class="game-moves">${g.moveCount ?? "?"} moves</div>
-        <div class="game-rating-change">${g.ratingChange != null ? (g.ratingChange >= 0 ? "+" : "") + g.ratingChange : "—"}</div>
-      `;
-      if (g.gameId) {
-        entry.onclick = () => openGameViewer(g.gameId, g.myColor, g.opponentUsername);
+      entry.className = `game-entry ${result}`;
+      appendTextElement(entry, "game-result", result);
+
+      const details = document.createElement("div");
+      appendTextElement(details, "game-opponent", `vs ${opponent}`);
+      appendTextElement(details, "game-meta", `${color === "white" ? "White" : "Black"} · ${playedAt}`);
+      entry.appendChild(details);
+      appendTextElement(entry, "game-moves", `${moveCount} moves`);
+      appendTextElement(entry, "game-rating-change", ratingChange);
+
+      if (isSafeFirebaseSegment(g.gameId)) {
+        entry.onclick = () => openGameViewer(g.gameId, color, opponent);
       } else {
         entry.style.cursor = "default";
       }
@@ -488,6 +561,7 @@
   let viewerIndex = 0;
 
   async function openGameViewer(gameId, myColor, opponent) {
+    if (!isSafeFirebaseSegment(gameId)) return;
     const snap     = await get(ref(db, `games/${gameId}`));
     const gameData = snap.val();
     const movesRaw = gameData?.moves;
@@ -501,7 +575,9 @@
     if (viewerBoard) { viewerBoard.destroy(); viewerBoard = null; }
     viewerBoard = Chessboard("viewBoard", {
       position:    "start",
-      pieceTheme:  "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+      pieceTheme:  window.resolvePieceTheme
+        ? window.resolvePieceTheme(window.getSettings?.().pieceSet)
+        : "pieces/cburnett/{piece}.svg",
       orientation: myColor || "white",
     });
 
@@ -569,28 +645,44 @@
   async function loadFriends(uid, friends) {
     const listEl = document.getElementById("friendsList");
     listEl.innerHTML = "";
+    if (!isSafeFirebaseSegment(uid)) {
+      listEl.textContent = "Friends are unavailable.";
+      return;
+    }
 
     const reqSnap  = await get(ref(db, `users/${uid}/friendRequests`));
     const requests = reqSnap.val() || {};
 
     for (const [fromUid, data] of Object.entries(requests)) {
+      if (!isSafeFirebaseSegment(fromUid) || !data || typeof data !== "object") continue;
+
       const item = document.createElement("div");
       item.className = "request-item";
-      item.innerHTML = `
-        <div class="request-label">📨 Request from ${data.username}</div>
-        <div class="request-actions">
-          <button class="btn-accept" data-uid="${fromUid}">Accept</button>
-          <button class="btn-decline" data-uid="${fromUid}">Decline</button>
-        </div>
-      `;
-      item.querySelector(".btn-accept").onclick = async () => {
-        await set(ref(db, `users/${uid}/friends/${fromUid}`), true);
-        await set(ref(db, `users/${fromUid}/friends/${uid}`), true);
-        await set(ref(db, `users/${uid}/friendRequests/${fromUid}`), null);
+      appendTextElement(item, "request-label", `📨 Request from ${displayName(data.username)}`);
+
+      const actions = document.createElement("div");
+      actions.className = "request-actions";
+      const acceptButton = document.createElement("button");
+      acceptButton.type = "button";
+      acceptButton.className = "btn-accept";
+      acceptButton.textContent = "Accept";
+      const declineButton = document.createElement("button");
+      declineButton.type = "button";
+      declineButton.className = "btn-decline";
+      declineButton.textContent = "Decline";
+      actions.append(acceptButton, declineButton);
+      item.appendChild(actions);
+
+      acceptButton.onclick = async () => {
+        await update(ref(db), {
+          [`users/${uid}/friends/${fromUid}`]: true,
+          [`users/${fromUid}/friends/${uid}`]: true,
+          [`users/${uid}/friendRequests/${fromUid}`]: null,
+        });
         const freshSnap = await get(ref(db, `users/${uid}/friends`));
         loadFriends(uid, freshSnap.val() || {});
       };
-      item.querySelector(".btn-decline").onclick = async () => {
+      declineButton.onclick = async () => {
         await set(ref(db, `users/${uid}/friendRequests/${fromUid}`), null);
         const freshSnap = await get(ref(db, `users/${uid}/friends`));
         loadFriends(uid, freshSnap.val() || {});
@@ -605,22 +697,23 @@
     }
 
     for (const fUid of uids) {
+      if (!isSafeFirebaseSegment(fUid)) continue;
+
       const [nameSnap, ratingSnap] = await Promise.all([
         get(ref(db, `users/${fUid}/username`)),
         get(ref(db, `users/${fUid}/rating`)),
       ]);
-      const fname   = nameSnap.val()   || "Unknown";
+      const fname   = displayName(nameSnap.val());
       const fRating = ratingSnap.val() ?? 800;
       const item    = document.createElement("div");
       item.className = "friend-item";
       item.title     = `View ${fname}'s profile`;
-      item.innerHTML = `
-        <div class="friend-avatar">${fname[0].toUpperCase()}</div>
-        <div>
-          <div class="friend-name">${fname}</div>
-          <div class="friend-rating">${fRating}</div>
-        </div>
-      `;
+
+      appendTextElement(item, "friend-avatar", fname[0].toUpperCase());
+      const friendDetails = document.createElement("div");
+      appendTextElement(friendDetails, "friend-name", fname);
+      appendTextElement(friendDetails, "friend-rating", String(fRating));
+      item.appendChild(friendDetails);
       item.onclick = () => {
         window.location.href = `profile.html?user=${encodeURIComponent(fname)}`;
       };
@@ -636,11 +729,21 @@
       const targetUsername = input.value.trim();
       msgEl.textContent    = "";
       if (!targetUsername) return;
+      if (!isSafeFirebaseSegment(targetUsername.toLowerCase())) {
+        msgEl.textContent = "Enter a valid username.";
+        msgEl.style.color = "#e05c5c";
+        return;
+      }
 
       const snap = await get(ref(db, `usernames/${targetUsername.toLowerCase()}`));
       if (!snap.exists()) { msgEl.textContent = "User not found."; msgEl.style.color = "#e05c5c"; return; }
 
       const friendUid = snap.val();
+      if (!isSafeFirebaseSegment(myUid) || !isSafeFirebaseSegment(friendUid)) {
+        msgEl.textContent = "This account cannot receive friend requests.";
+        msgEl.style.color = "#e05c5c";
+        return;
+      }
       if (friendUid === myUid) { msgEl.textContent = "That's you!"; msgEl.style.color = "#e05c5c"; return; }
 
       const alreadyFriend = await get(ref(db, `users/${myUid}/friends/${friendUid}`));
