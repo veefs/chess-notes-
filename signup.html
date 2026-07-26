@@ -13,25 +13,25 @@
 
 <main>
   <div class="auth-wrap">
-    <div class="auth-box">
-      <h2 class="auth-title">Create account</h2>
+    <form class="auth-box" id="signupForm" aria-labelledby="signupTitle">
+      <h2 class="auth-title" id="signupTitle">Create account</h2>
       <p class="auth-sub">Join FaithChess and start playing</p>
       <div class="auth-field">
-        <label>Username</label>
-        <input type="text" id="usernameInput" placeholder="your username" maxlength="24" />
+        <label for="usernameInput">Username</label>
+        <input type="text" id="usernameInput" name="username" placeholder="your username" autocomplete="username" minlength="3" maxlength="24" pattern="[A-Za-z0-9_\-]{3,24}" title="Use 3–24 letters, numbers, underscores, or hyphens." autocapitalize="none" required />
       </div>
       <div class="auth-field">
-        <label>Email</label>
-        <input type="email" id="emailInput" placeholder="you@example.com" />
+        <label for="emailInput">Email</label>
+        <input type="email" id="emailInput" name="email" placeholder="you@example.com" autocomplete="email" required />
       </div>
       <div class="auth-field">
-        <label>Password</label>
-        <input type="password" id="passwordInput" placeholder="min. 6 characters" />
+        <label for="passwordInput">Password</label>
+        <input type="password" id="passwordInput" name="password" placeholder="min. 6 characters" autocomplete="new-password" minlength="6" required />
       </div>
-      <div id="authError" class="auth-error hidden"></div>
-      <button class="auth-btn" id="signupBtn">Create Account</button>
+      <div id="authError" class="auth-error hidden" role="alert" aria-live="polite"></div>
+      <button class="auth-btn" id="signupBtn" type="submit">Create Account</button>
       <p class="auth-switch">Already have an account? <a href="login.html">Log In</a></p>
-    </div>
+    </form>
   </div>
 </main>
 
@@ -39,8 +39,8 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { getAuth, createUserWithEmailAndPassword, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getDatabase, ref, runTransaction, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAUdXVlmN9xhhIzubK0MTtGO3hA9JkHClA",
@@ -55,43 +55,86 @@
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getDatabase(app);
+  const USERNAME_PATTERN = /^[A-Za-z0-9_-]{3,24}$/;
+  let signupInFlight = false;
 
-  document.getElementById("signupBtn").onclick = async () => {
+  document.getElementById("signupForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (signupInFlight) return;
+
     const username = document.getElementById("usernameInput").value.trim();
     const email = document.getElementById("emailInput").value.trim();
     const password = document.getElementById("passwordInput").value;
     const errEl = document.getElementById("authError");
+    const form = document.getElementById("signupForm");
+    const submitBtn = document.getElementById("signupBtn");
 
     errEl.classList.add("hidden");
     errEl.textContent = "";
 
-    if (!username) { errEl.textContent = "Please enter a username."; errEl.classList.remove("hidden"); return; }
-    if (username.length < 3) { errEl.textContent = "Username must be at least 3 characters."; errEl.classList.remove("hidden"); return; }
+    if (!USERNAME_PATTERN.test(username)) {
+      errEl.textContent = "Username must be 3–24 letters, numbers, underscores, or hyphens.";
+      errEl.classList.remove("hidden");
+      return;
+    }
 
-    const usernameSnap = await get(ref(db, `usernames/${username.toLowerCase()}`));
-    if (usernameSnap.exists()) { errEl.textContent = "Username already taken."; errEl.classList.remove("hidden"); return; }
+    signupInFlight = true;
+    submitBtn.disabled = true;
+    form.setAttribute("aria-busy", "true");
+    const usernameKey = username.toLowerCase();
+    let createdUser = null;
+    let usernameClaimRef = null;
+    let ownsUsernameClaim = false;
 
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
+      createdUser = cred.user;
       const uid = cred.user.uid;
 
-      await set(ref(db, `users/${uid}/username`), username);
-      await set(ref(db, `users/${uid}/email`), email);
-      await set(ref(db, `users/${uid}/rating`), 1200);
-      await set(ref(db, `users/${uid}/wins`), 0);
-      await set(ref(db, `users/${uid}/losses`), 0);
-      await set(ref(db, `users/${uid}/draws`), 0);
-      await set(ref(db, `users/${uid}/createdAt`), Date.now());
-      await set(ref(db, `usernames/${username.toLowerCase()}`), uid);
+      usernameClaimRef = ref(db, `usernames/${usernameKey}`);
+      const claimResult = await runTransaction(usernameClaimRef, currentOwner => {
+        if (currentOwner === null || currentOwner === uid) return uid;
+        return;
+      }, { applyLocally: false });
+      ownsUsernameClaim = claimResult.committed && claimResult.snapshot.val() === uid;
+      if (!ownsUsernameClaim) {
+        const claimError = new Error("username_taken");
+        claimError.code = "auth/username-taken";
+        throw claimError;
+      }
+
+      await update(ref(db), {
+        [`users/${uid}`]: {
+          username,
+          email,
+          rating: 1200,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          createdAt: Date.now(),
+        },
+      });
 
       window.location.href = "index.html";
     } catch (err) {
+      if (createdUser && ownsUsernameClaim && usernameClaimRef) {
+        await runTransaction(usernameClaimRef, currentOwner =>
+          currentOwner === createdUser.uid ? null : undefined,
+        { applyLocally: false }).catch(() => {});
+      }
+      if (createdUser) await deleteUser(createdUser).catch(() => {});
+
       errEl.textContent = friendlyError(err.code);
       errEl.classList.remove("hidden");
+    } finally {
+      signupInFlight = false;
+      submitBtn.disabled = false;
+      form.removeAttribute("aria-busy");
     }
-  };
+  });
 
   function friendlyError(code) {
+    if (code === "auth/username-taken") return "Username already taken.";
     if (code === "auth/email-already-in-use") return "An account with that email already exists.";
     if (code === "auth/invalid-email") return "Invalid email address.";
     if (code === "auth/weak-password") return "Password must be at least 6 characters.";
