@@ -1373,7 +1373,6 @@ document.getElementById('file-inp').addEventListener('change', e => {
 });
 
 // ─── Save / Submit ───────────────────────────────────────────────────
-const WEBHOOK_URL = 'https://discord.com/api/webhooks/1495145721655988436/VmGzeuR-VYRH21adIMPCk3koKguuUcE1v0PtAEsA96ZT0xnHt9cjFMNQBr3WV6VNN4h9';
 
 function doLocalSave() {
   const blob = new Blob([JSON.stringify(LINES, null, 2)], {type: 'application/json'});
@@ -1391,7 +1390,7 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
 
 // ─── Chess Engine ────────────────────────────────────────────────────
-const BASE='https://lichess1.org/assets/piece/cburnett/';
+const BASE='pieces/cburnett/';
 function mkPS(){const sq=getSq();return{wK:`<img src="${BASE}wK.svg" width="${sq}" height="${sq}">`,wQ:`<img src="${BASE}wQ.svg" width="${sq}" height="${sq}">`,wR:`<img src="${BASE}wR.svg" width="${sq}" height="${sq}">`,wB:`<img src="${BASE}wB.svg" width="${sq}" height="${sq}">`,wN:`<img src="${BASE}wN.svg" width="${sq}" height="${sq}">`,wP:`<img src="${BASE}wP.svg" width="${sq}" height="${sq}">`,bK:`<img src="${BASE}bK.svg" width="${sq}" height="${sq}">`,bQ:`<img src="${BASE}bQ.svg" width="${sq}" height="${sq}">`,bR:`<img src="${BASE}bR.svg" width="${sq}" height="${sq}">`,bB:`<img src="${BASE}bB.svg" width="${sq}" height="${sq}">`,bN:`<img src="${BASE}bN.svg" width="${sq}" height="${sq}">`,bP:`<img src="${BASE}bP.svg" width="${sq}" height="${sq}">`};}
 const PS=mkPS();
 function getSq(){
@@ -6679,56 +6678,41 @@ document.getElementById('settings-btn').addEventListener('click', openSettings);
 applySettings(loadSettings());
 </script>
 
-<!-- SAVE / SUBMIT MODAL -->
-<div id="save-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;">
+<!-- SAVE / CONTRIBUTE MODAL -->
+<div id="save-modal" role="dialog" aria-modal="true" aria-labelledby="save-modal-title" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;">
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:28px 32px;width:min(420px,90vw);box-shadow:0 20px 60px rgba(0,0,0,.6);">
-    <div style="font-size:16px;font-weight:700;color:var(--text2);margin-bottom:4px;">Save JSON</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:22px;">Download locally or send to the FaithChess team for review.</div>
+    <div id="save-modal-title" style="font-size:16px;font-weight:700;color:var(--text2);margin-bottom:4px;">Save theory JSON</div>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 22px;">Download your work locally. To share it with the project, attach the JSON to a GitHub issue or pull request.</p>
 
-    <button id="save-modal-local" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:16px;background:rgba(165,148,192,.15);border:1px solid var(--accent);border-radius:var(--radius);color:var(--accent);font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6v7a1 1 0 001 1h10a1 1 0 001-1V6"/><polyline points="5 2 5 7 11 7 11 2"/><polyline points="11 2 14 2 14 6 2 6 2 2 5 2"/></svg>
+    <button id="save-modal-local" type="button" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:12px;background:rgba(165,148,192,.15);border:1px solid var(--accent);border-radius:var(--radius);color:var(--accent);font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;">
       Save locally
     </button>
 
-    <textarea id="save-modal-note" placeholder="Optional: describe what you added or changed…" style="width:100%;box-sizing:border-box;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:9px 12px;font-size:13px;font-family:inherit;resize:vertical;min-height:68px;outline:none;margin-bottom:10px;"></textarea>
+    <a href="https://github.com/veefs/chess-notes-/issues/new" target="_blank" rel="noopener noreferrer" style="width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text2);font-size:13px;font-family:inherit;font-weight:600;text-decoration:none;">
+      Open GitHub contribution page
+    </a>
 
-    <button id="save-modal-submit" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;margin-bottom:14px;background:rgba(88,101,242,.12);border:1px solid rgba(88,101,242,.45);border-radius:var(--radius);color:#8b9cf4;font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 3a1 1 0 00-1-1H4a1 1 0 00-1 1v7a1 1 0 001 1h7l3 3V3z"/></svg>
-      Submit for review
-    </button>
-
-    <button id="save-modal-cancel" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;">Cancel</button>
+    <button id="save-modal-cancel" type="button" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;">Cancel</button>
   </div>
 </div>
 
 <script>
+const saveModal = document.getElementById('save-modal');
+function closeSaveModal() {
+  saveModal.style.display = 'none';
+}
 document.getElementById('save-modal-local').addEventListener('click', function() {
-  document.getElementById('save-modal').style.display = 'none';
+  closeSaveModal();
   doLocalSave();
 });
-document.getElementById('save-modal-cancel').addEventListener('click', function() {
-  document.getElementById('save-modal').style.display = 'none';
-  document.getElementById('save-modal-note').value = '';
+document.getElementById('save-modal-cancel').addEventListener('click', closeSaveModal);
+saveModal.addEventListener('click', function(event) {
+  if (event.target === saveModal) closeSaveModal();
 });
-document.getElementById('save-modal-submit').addEventListener('click', async function() {
-  var note = document.getElementById('save-modal-note').value.trim();
-  var fd = new FormData();
-  fd.append('file', new File([JSON.stringify(LINES, null, 2)], currentFilename, {type:'application/json'}));
-  fd.append('payload_json', JSON.stringify({
-    username: 'FaithChess Submissions',
-    content: note ? ('**New submission**\n' + note) : '**New submission** _(no note)_'
-  }));
-  var btn = document.getElementById('save-modal-submit');
-  btn.textContent = 'Sending…'; btn.disabled = true;
-  try {
-    var res = await fetch(WEBHOOK_URL, {method:'POST', body:fd});
-    if (res.ok) {
-      document.getElementById('save-modal').style.display = 'none';
-      document.getElementById('save-modal-note').value = '';
-      toast('Submitted for review!', 'ok');
-    } else { toast('Discord error ' + res.status, 'err'); }
-  } catch(e) { toast('Network error — save locally instead', 'err'); }
-  btn.textContent = 'Submit for review'; btn.disabled = false;
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape' && saveModal.style.display !== 'none') {
+    closeSaveModal();
+  }
 });
 </script>
 <script src="settings.js"></script>

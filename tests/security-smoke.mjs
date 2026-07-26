@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { Script, createContext } from "node:vm";
 
-const [auth, challenges, profile] = await Promise.all([
+const [auth, challenges, profile, signup, theory] = await Promise.all([
   readFile(new URL("../auth.js", import.meta.url), "utf8"),
   readFile(new URL("../challenges.js", import.meta.url), "utf8"),
   readFile(new URL("../profile.html", import.meta.url), "utf8"),
+  readFile(new URL("../signup.html", import.meta.url), "utf8"),
+  readFile(new URL("../theory.html", import.meta.url), "utf8"),
 ]);
 
 assert.doesNotMatch(
@@ -44,6 +46,17 @@ assert.match(profile, /appendTextElement\(details, "game-opponent", `vs \$\{oppo
 assert.match(profile, /appendTextElement\(item, "request-label"/);
 assert.match(profile, /pieceTheme:\s+window\.resolvePieceTheme/);
 assert.match(profile, /await update\(ref\(db\), \{\s*\[`users\/\$\{uid\}\/friends\/\$\{fromUid\}`\]: true,/s);
+assert.doesNotMatch(
+  signup,
+  /\[`users\/\$\{uid\}`\]\s*:\s*\{[\s\S]*?\bemail\s*,/s,
+  "Realtime Database profiles must not duplicate Firebase Auth email addresses",
+);
+assert.doesNotMatch(theory, /discord(?:app)?\.com\/api\/webhooks|WEBHOOK_URL/i);
+assert.match(theory, /const BASE='pieces\/cburnett\/';/);
+assert.match(
+  theory,
+  /href="https:\/\/github\.com\/veefs\/chess-notes-\/issues\/new"[^>]*rel="noopener noreferrer"/,
+);
 
 function extractFunction(source, name) {
   const match = source.match(
@@ -67,10 +80,11 @@ function evaluateAvatarPolicy() {
 }
 
 function evaluateProfileSegmentPolicy() {
-  const start = profile.indexOf("  const RESERVED_FIREBASE_SEGMENTS");
-  const end = profile.indexOf("\n\n  function displayName", start);
+  const normalizedProfile = profile.replace(/\r\n/g, "\n");
+  const start = normalizedProfile.indexOf("  const RESERVED_FIREBASE_SEGMENTS");
+  const end = normalizedProfile.indexOf("\n\n  function displayName", start);
   assert.ok(start >= 0 && end > start, "missing profile segment policy");
-  const policySource = profile.slice(start, end).replace(/^  /gm, "");
+  const policySource = normalizedProfile.slice(start, end).replace(/^  /gm, "");
   const context = createContext({});
   new Script(
     `${policySource}\nglobalThis.segmentPolicy = isSafeFirebaseSegment;`,
