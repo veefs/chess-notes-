@@ -127,9 +127,14 @@ class ChessStub {
   }
 }
 
+let pieceThemeResolveCalls = 0;
 const windowObject = {
   __FAITHCHESS_TEST_MODE__: true,
   getSettings: () => ({ pieceSet: "cburnett", sound: false, legalMoves: true }),
+  resolvePieceTheme: pieceSet => {
+    pieceThemeResolveCalls += 1;
+    return `pieces/${pieceSet}/{piece}.svg`;
+  },
   location: {
     href: "https://faith.example/play.html",
     search: "",
@@ -139,14 +144,18 @@ const windowObject = {
   },
 };
 
+const boardConfigs = [];
 const context = {
   window: windowObject,
   document,
   Chess: ChessStub,
-  Chessboard: () => ({
-    destroy() {},
-    position() {},
-  }),
+  Chessboard: (id, config) => {
+    boardConfigs.push({ id, config });
+    return {
+      destroy() {},
+      position() {},
+    };
+  },
   Audio: class {
     play() {
       return Promise.resolve();
@@ -182,9 +191,150 @@ const check = (name, callback) => {
   console.log(`ok - ${name}`);
 };
 
+const checkAsync = async (name, callback) => {
+  await callback();
+  checks += 1;
+  console.log(`ok - ${name}`);
+};
+
+const clone = value => value === undefined
+  ? undefined
+  : JSON.parse(JSON.stringify(value));
+
+function createFirebaseMock(initialState = {}, options = {}) {
+  const state = clone(initialState);
+  const calls = {
+    gets: [],
+    transactions: [],
+    updates: [],
+    unsubscriptions: 0,
+  };
+  let pushedKey = options.pushedKey || "generated-game";
+  let valueListener = null;
+  const failTransactionOnce = new Set(options.failTransactionOnce || []);
+
+  const segments = pathValue => String(pathValue || "")
+    .split("/")
+    .filter(Boolean);
+  const readPath = pathValue => {
+    let cursor = state;
+    for (const segment of segments(pathValue)) {
+      if (!cursor || typeof cursor !== "object") return undefined;
+      cursor = cursor[segment];
+    }
+    return cursor;
+  };
+  const writePath = (pathValue, value) => {
+    const parts = segments(pathValue);
+    if (parts.length === 0) {
+      for (const key of Object.keys(state)) delete state[key];
+      Object.assign(state, clone(value));
+      return;
+    }
+    let cursor = state;
+    for (const segment of parts.slice(0, -1)) {
+      if (!cursor[segment] || typeof cursor[segment] !== "object") {
+        cursor[segment] = {};
+      }
+      cursor = cursor[segment];
+    }
+    cursor[parts.at(-1)] = clone(value);
+  };
+  const snapshot = value => ({
+    exists: () => value !== undefined && value !== null,
+    val: () => clone(value),
+  });
+  const ref = (_db, pathValue = "") => ({ path: pathValue });
+
+  const api = {
+    ref,
+    get: async target => {
+      calls.gets.push(target.path);
+      return snapshot(readPath(target.path));
+    },
+    push: () => ({ key: pushedKey }),
+    update: async (target, updates) => {
+      calls.updates.push({
+        root: target.path,
+        updates: clone(updates),
+      });
+      for (const [pathValue, value] of Object.entries(updates)) {
+        writePath(pathValue, value);
+      }
+    },
+    runTransaction: async (target, updater, transactionOptions) => {
+      calls.transactions.push({
+        path: target.path,
+        options: clone(transactionOptions),
+      });
+      if (failTransactionOnce.delete(target.path)) {
+        throw new Error(`simulated transaction failure: ${target.path}`);
+      }
+      const current = clone(readPath(target.path));
+      const next = updater(current);
+      if (next === undefined) {
+        return {
+          committed: false,
+          snapshot: snapshot(readPath(target.path)),
+        };
+      }
+      writePath(target.path, next);
+      return {
+        committed: true,
+        snapshot: snapshot(readPath(target.path)),
+      };
+    },
+    onValue: (_target, callback) => {
+      valueListener = callback;
+      return () => {
+        calls.unsubscriptions += 1;
+      };
+    },
+  };
+
+  return {
+    api,
+    calls,
+    state,
+    emitValue: value => valueListener(snapshot(value)),
+    setPath: writePath,
+    setPushedKey: value => {
+      pushedKey = value;
+    },
+  };
+}
+
 check("play.js parses as a classic browser script", () => {
   assert.ok(script);
   assert.equal(source.match(/const params\s*=/g)?.length, 1);
+});
+
+check("all play boards use one resolved local piece theme", () => {
+  assert.equal(pieceThemeResolveCalls, 1);
+  assert.equal(boardConfigs[0].config.pieceTheme, "pieces/cburnett/{piece}.svg");
+
+  const originalListenToGame = context.listenToGame;
+  context.listenToGame = () => {};
+  windowObject.myUid = "piece-theme-user";
+  assert.equal(context.startGame("piece-theme-game", "white", "blitz"), true);
+  getElement("goPlayAgain").onclick();
+  context.listenToGame = originalListenToGame;
+
+  const recentThemes = boardConfigs.slice(-2)
+    .map(entry => entry.config.pieceTheme);
+  assert.deepEqual(recentThemes, [
+    "pieces/cburnett/{piece}.svg",
+    "pieces/cburnett/{piece}.svg",
+  ]);
+  assert.doesNotMatch(source, /chessboardjs\.com\/img\/chesspieces/);
+
+  const originalResolver = windowObject.resolvePieceTheme;
+  windowObject.resolvePieceTheme = () => "https://evil.example/{piece}.svg";
+  assert.equal(
+    context.resolveLocalPieceTheme("anything"),
+    "pieces/cburnett/{piece}.svg"
+  );
+  windowObject.resolvePieceTheme = originalResolver;
 });
 
 check("stored names render as text and unsafe avatar schemes are rejected", () => {
@@ -197,13 +347,28 @@ check("stored names render as text and unsafe avatar schemes are rejected", () =
   assert.equal(context.safeAvatarUrl("javascript:alert(1)"), null);
   assert.equal(context.safeAvatarUrl("data:image/svg+xml,<svg/>"), null);
   assert.equal(context.safeAvatarUrl("http://remote.example/avatar.png"), null);
+  assert.equal(context.safeAvatarUrl("https://cdn.example/avatar.png"), null);
   assert.equal(
-    context.safeAvatarUrl("https://cdn.example/avatar.png"),
-    "https://cdn.example/avatar.png"
+    context.safeAvatarUrl("https://res.cloudinary.com/demo/image/upload/avatar.png"),
+    "https://res.cloudinary.com/demo/image/upload/avatar.png"
   );
   assert.equal(
     context.safeAvatarUrl("avatars/local.png"),
     "https://faith.example/avatars/local.png"
+  );
+  assert.equal(
+    context.safeAvatarUrl(
+      "avatars/local.png",
+      "http://localhost:4173/play.html"
+    ),
+    "http://localhost:4173/avatars/local.png"
+  );
+  assert.equal(
+    context.safeAvatarUrl(
+      "http://localhost:4173/avatar.png",
+      "https://faith.example/play.html"
+    ),
+    null
   );
 
   const avatar = getElement("safeAvatarTest");
@@ -211,6 +376,9 @@ check("stored names render as text and unsafe avatar schemes are rejected", () =
   assert.equal(avatar.style.backgroundImage, "");
   assert.equal(avatar.textContent, "A");
   assert.doesNotMatch(source, /\.innerHTML\s*=/);
+  assert.equal(context.normalizeFirebaseKey(" valid-id "), null);
+  assert.equal(context.normalizeFirebaseKey("__proto__"), null);
+  assert.equal(context.normalizeFirebaseKey("bad/id"), null);
 });
 
 check("queue matching resets the selected opponent on every retry", () => {
@@ -230,6 +398,121 @@ check("queue matching resets the selected opponent on every retry", () => {
   matchedOpponent = retryAttempt.opponent;
   assert.equal(matchedOpponent, null);
   assert.match(source, /matchedOpponent = plan\.opponent/);
+});
+
+await checkAsync("game creation publishes game and both pointers atomically", async () => {
+  const firebase = createFirebaseMock({}, { pushedKey: "created-game" });
+  const events = [];
+  const originalUpdate = firebase.api.update;
+  firebase.api.update = async (...args) => {
+    events.push("update");
+    return originalUpdate(...args);
+  };
+
+  const gameId = await context.createGame(
+    "white-user",
+    "White",
+    "black-user",
+    "Black",
+    "blitz",
+    {
+      firebaseApi: firebase.api,
+      db: firebase.state,
+      now: () => 12_345,
+      startGame: (...args) => events.push(["start", ...args]),
+    }
+  );
+
+  assert.equal(gameId, "created-game");
+  assert.equal(firebase.calls.updates.length, 1);
+  assert.equal(firebase.calls.updates[0].root, "");
+  assert.deepEqual(
+    Object.keys(firebase.calls.updates[0].updates).sort(),
+    [
+      "games/created-game",
+      "users/black-user/currentGame",
+      "users/white-user/currentGame",
+    ]
+  );
+  assert.equal(firebase.state.games["created-game"].status, "playing");
+  assert.equal(firebase.state.users["white-user"].currentGame, "created-game");
+  assert.equal(firebase.state.users["black-user"].currentGame, "created-game");
+  assert.deepEqual(events, [
+    "update",
+    ["start", "created-game", "white", "blitz"],
+  ]);
+
+  await assert.rejects(
+    context.createGame(
+      "bad/user",
+      "White",
+      "black-user",
+      "Black",
+      "blitz",
+      {
+        firebaseApi: firebase.api,
+        db: firebase.state,
+      }
+    ),
+    /invalid/
+  );
+  assert.equal(firebase.calls.updates.length, 1);
+});
+
+await checkAsync("queue resume fetches the game and derives only valid membership", async () => {
+  const firebase = createFirebaseMock({
+    users: {
+      me: { currentGame: "resume-game" },
+    },
+    games: {
+      "resume-game": {
+        status: "playing",
+        timeControl: "rapid",
+        white: { uid: "someone-else" },
+        black: { uid: "another-user" },
+      },
+    },
+  });
+  const starts = [];
+  await context.listenForGame("me", "blitz", {
+    firebaseApi: firebase.api,
+    db: firebase.state,
+    startGame: (...args) => starts.push(args),
+  });
+
+  await firebase.emitValue("bad/game");
+  assert.equal(firebase.calls.gets.length, 0);
+
+  await firebase.emitValue("resume-game");
+  assert.deepEqual(starts, []);
+  assert.deepEqual(firebase.calls.gets, ["games/resume-game"]);
+
+  firebase.setPath("games/resume-game", {
+    status: "waiting",
+    timeControl: "rapid",
+    white: { uid: "someone-else" },
+    black: { uid: "me" },
+  });
+  await firebase.emitValue("resume-game");
+  assert.deepEqual(starts, []);
+
+  firebase.setPath("games/resume-game", {
+    status: "playing",
+    timeControl: "rapid",
+    white: { uid: "someone-else" },
+    black: { uid: "me" },
+  });
+  await firebase.emitValue("resume-game");
+  assert.deepEqual(starts, [["resume-game", "black", "rapid"]]);
+  assert.equal(firebase.calls.unsubscriptions, 1);
+
+  await assert.rejects(
+    context.listenForGame("bad/user", "rapid", {
+      firebaseApi: firebase.api,
+      db: firebase.state,
+    }),
+    /invalid/
+  );
 });
 
 check("tournament context is restored from persisted game data", () => {
@@ -257,6 +540,187 @@ check("tournament context is restored from persisted game data", () => {
       "black-id"
     ),
     "black"
+  );
+});
+
+await checkAsync("duplicate result processing is atomic, idempotent, and retryable", async () => {
+  const firebase = createFirebaseMock({
+    users: {
+      me: {
+        wins: 4,
+        losses: 1,
+        draws: 2,
+        rating: 900,
+        currentGame: "game-1",
+        gameHistory: {},
+      },
+    },
+    tournaments: {
+      arena: {
+        players: {
+          me: {
+            score: 5,
+            wins: 2,
+            losses: 1,
+            draws: 1,
+            gamesPlayed: 4,
+          },
+        },
+      },
+    },
+  }, {
+    failTransactionOnce: ["tournaments/arena/players/me"],
+  });
+  const finishedGame = {
+    status: "finished",
+    winner: "white",
+    result: "1-0",
+    finishReason: "checkmate",
+    finishedAt: 50_000,
+    timeControl: "blitz",
+    tournamentId: "arena",
+    moves: ["e4", "e5", "Nf3"],
+    white: { uid: "me", username: "Me" },
+    black: { uid: "opponent", username: "Opponent" },
+  };
+  const saveOptions = {
+    firebaseApi: firebase.api,
+    db: firebase.state,
+    uid: "me",
+    gameId: "game-1",
+    color: "white",
+    tournamentId: "arena",
+    now: () => 60_000,
+  };
+
+  await assert.rejects(
+    context.saveGameResult(finishedGame, "win", saveOptions),
+    /simulated transaction failure/
+  );
+
+  const userAfterInterruptedSave = firebase.state.users.me;
+  assert.equal(userAfterInterruptedSave.wins, 5);
+  assert.equal(userAfterInterruptedSave.rating, 910);
+  assert.equal(userAfterInterruptedSave.currentGame, null);
+  assert.deepEqual(
+    Object.keys(userAfterInterruptedSave.gameHistory),
+    ["game-1"]
+  );
+  assert.equal(
+    userAfterInterruptedSave.resultClaims["game-1"].tournamentEligible,
+    true
+  );
+  assert.equal(firebase.state.tournaments.arena.players.me.gamesPlayed, 4);
+
+  const retry = await context.saveGameResult(
+    finishedGame,
+    "win",
+    saveOptions
+  );
+  assert.equal(retry.profileCommitted, false);
+  assert.equal(retry.tournamentCommitted, true);
+  assert.equal(firebase.state.users.me.wins, 5);
+  assert.equal(firebase.state.users.me.rating, 910);
+  assert.equal(firebase.state.tournaments.arena.players.me.score, 7);
+  assert.equal(firebase.state.tournaments.arena.players.me.gamesPlayed, 5);
+
+  const replay = await context.saveGameResult(
+    finishedGame,
+    "win",
+    saveOptions
+  );
+  assert.equal(replay.profileCommitted, false);
+  assert.equal(replay.tournamentCommitted, false);
+  assert.equal(firebase.state.users.me.wins, 5);
+  assert.equal(firebase.state.users.me.rating, 910);
+  assert.deepEqual(Object.keys(firebase.state.users.me.gameHistory), ["game-1"]);
+  assert.equal(firebase.state.tournaments.arena.players.me.score, 7);
+  assert.equal(firebase.state.tournaments.arena.players.me.gamesPlayed, 5);
+
+  await assert.rejects(
+    context.saveGameResult(
+      {
+        ...finishedGame,
+        winner: "black",
+        result: "0-1",
+      },
+      "loss",
+      saveOptions
+    ),
+    /conflicted/
+  );
+  assert.equal(firebase.state.users.me.losses, 1);
+  assert.equal(firebase.state.users.me.rating, 910);
+
+  assert.ok(firebase.calls.transactions.length >= 6);
+  assert.ok(firebase.calls.transactions.every(
+    call => call.options?.applyLocally === false
+  ));
+});
+
+await checkAsync("legacy game history blocks replay without guessing tournament state", async () => {
+  const firebase = createFirebaseMock({
+    users: {
+      me: {
+        wins: 3,
+        rating: 850,
+        currentGame: "legacy-game",
+        gameHistory: {
+          oldPushKey: {
+            gameId: "legacy-game",
+            result: "win",
+            myColor: "white",
+            playedAt: 40_000,
+          },
+        },
+      },
+    },
+    tournaments: {
+      arena: {
+        players: {
+          me: {
+            score: 6,
+            wins: 3,
+            gamesPlayed: 3,
+          },
+        },
+      },
+    },
+  });
+  const finishedGame = {
+    status: "finished",
+    winner: "white",
+    result: "1-0",
+    finishedAt: 40_000,
+    timeControl: "rapid",
+    tournamentId: "arena",
+    moves: ["d4"],
+    white: { uid: "me", username: "Me" },
+    black: { uid: "opponent", username: "Opponent" },
+  };
+
+  const result = await context.saveGameResult(finishedGame, "win", {
+    firebaseApi: firebase.api,
+    db: firebase.state,
+    uid: "me",
+    gameId: "legacy-game",
+    color: "white",
+  });
+
+  assert.equal(result.legacyResult, true);
+  assert.equal(firebase.state.users.me.wins, 3);
+  assert.equal(firebase.state.users.me.rating, 850);
+  assert.equal(firebase.state.users.me.currentGame, null);
+  assert.equal(
+    firebase.state.users.me.resultClaims["legacy-game"].tournamentEligible,
+    false
+  );
+  assert.equal(firebase.state.tournaments.arena.players.me.score, 6);
+  assert.equal(
+    firebase.calls.transactions.some(
+      call => call.path.startsWith("tournaments/")
+    ),
+    false
   );
 });
 

@@ -1,5 +1,6 @@
 const settings = window.getSettings ? window.getSettings() : {};
 const pieceSet = settings.pieceSet || "cburnett";
+const pieceTheme = resolveLocalPieceTheme(pieceSet);
 
 // =======================
 // TIME CONTROLS
@@ -36,25 +37,70 @@ function normalizeDisplayName(value, fallback) {
   return normalized ? normalized.slice(0, 80) : fallback;
 }
 
+function resolveLocalPieceTheme(selectedPieceSet) {
+  const fallback = "pieces/cburnett/{piece}.svg";
+  try {
+    const candidate = typeof window.resolvePieceTheme === "function"
+      ? window.resolvePieceTheme(selectedPieceSet)
+      : fallback;
+    if (typeof candidate !== "string" || !candidate.includes("{piece}")) {
+      return fallback;
+    }
+
+    const base = new URL(window.location.href);
+    const parsed = new URL(candidate, base);
+    if (parsed.origin !== base.origin ||
+        !["https:", "http:"].includes(parsed.protocol)) {
+      return fallback;
+    }
+    return candidate;
+  } catch {
+    return fallback;
+  }
+}
+
 function normalizeFirebaseKey(value) {
   if (typeof value !== "string") return null;
   const normalized = value.trim();
-  if (!normalized || normalized.length > 160 || /[.#$[\]/]/.test(normalized)) {
+  if (normalized !== value ||
+      !normalized ||
+      normalized.length > 160 ||
+      /[.#$[\]/\u0000-\u001F\u007F]/.test(normalized) ||
+      ["__proto__", "constructor", "prototype"].includes(normalized)) {
     return null;
   }
   return normalized;
 }
 
+function normalizeTimeControl(value) {
+  return typeof value === "string" &&
+    Object.prototype.hasOwnProperty.call(TIME_CONTROLS, value)
+    ? value
+    : null;
+}
+
 function safeAvatarUrl(value, baseHref = window.location.href) {
   if (typeof value !== "string" || value.length > 2048) return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
 
   try {
-    const parsed = new URL(value.trim(), baseHref);
-    const localHttp = parsed.protocol === "http:" &&
-      ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
+    const base = new URL(baseHref);
+    const parsed = new URL(normalized, base);
+    const isLoopback = hostname =>
+      ["localhost", "127.0.0.1", "[::1]"].includes(hostname);
+    const sameOrigin = parsed.origin === base.origin;
+    const trustedSameOrigin = sameOrigin && (
+      parsed.protocol === "https:" ||
+      (parsed.protocol === "http:" && isLoopback(parsed.hostname))
+    );
+    const trustedCloudinary = parsed.protocol === "https:" &&
+      parsed.hostname === "res.cloudinary.com" &&
+      !parsed.port;
 
-    if ((parsed.protocol !== "https:" && !localHttp) ||
-        parsed.username || parsed.password) {
+    if ((!trustedSameOrigin && !trustedCloudinary) ||
+        parsed.username ||
+        parsed.password) {
       return null;
     }
 
@@ -86,6 +132,223 @@ function resolveTournamentContext(urlTournamentId, gameData) {
   return normalizeFirebaseKey(urlTournamentId);
 }
 
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function resultForColor(data, color) {
+  if (!data || data.status !== "finished" ||
+      (color !== "white" && color !== "black")) {
+    return null;
+  }
+
+  const declaredWinner = data.winner;
+  if (declaredWinner != null &&
+      declaredWinner !== "white" &&
+      declaredWinner !== "black") {
+    return null;
+  }
+
+  let resultWinner = null;
+  if (data.result === "1-0") resultWinner = "white";
+  else if (data.result === "0-1") resultWinner = "black";
+  else if (data.result !== "1/2-1/2" && data.result != null) return null;
+
+  if (declaredWinner && data.result != null &&
+      declaredWinner !== resultWinner) {
+    return null;
+  }
+
+  let winner = declaredWinner || resultWinner;
+  if (!winner && data.result == null) {
+    if (data.resigned === "white" || data.resigned === "black") {
+      winner = oppositeColor(data.resigned);
+    } else if (!DRAW_REASONS.has(data.finishReason) && !data.drawAccepted) {
+      return null;
+    }
+  }
+  if (!winner) return "draw";
+  return winner === color ? "win" : "loss";
+}
+
+function resultClaimMatches(stored, expected) {
+  return isRecord(stored) &&
+    stored.gameId === expected.gameId &&
+    stored.result === expected.result &&
+    stored.myColor === expected.myColor &&
+    stored.opponentUid === expected.opponentUid &&
+    (stored.tournamentId || null) === (expected.tournamentId || null);
+}
+
+function historyEntryMatches(entry, expected) {
+  return isRecord(entry) &&
+    entry.gameId === expected.gameId &&
+    entry.result === expected.result &&
+    entry.myColor === expected.myColor;
+}
+
+function resultClaimMarker(claim, overrides = {}) {
+  return {
+    gameId: claim.gameId,
+    result: claim.result,
+    myColor: claim.myColor,
+    opponentUid: claim.opponentUid,
+    tournamentId: claim.tournamentId || null,
+    appliedAt: claim.playedAt,
+    tournamentEligible: true,
+    version: 1,
+    ...overrides,
+  };
+}
+
+function applyUserGameResult(user, claim) {
+  if (!isRecord(user) ||
+      !normalizeFirebaseKey(claim?.gameId) ||
+      !normalizeFirebaseKey(claim?.opponentUid) ||
+      (claim?.tournamentId != null &&
+        !normalizeFirebaseKey(claim?.tournamentId)) ||
+      !["win", "loss", "draw"].includes(claim?.result) ||
+      !["white", "black"].includes(claim?.myColor) ||
+      !Number.isFinite(claim?.playedAt) ||
+      claim.playedAt < 0 ||
+      !Number.isInteger(claim?.moveCount) ||
+      claim.moveCount < 0 ||
+      !normalizeTimeControl(claim?.timeControl)) {
+    return undefined;
+  }
+
+  const claims = isRecord(user.resultClaims) ? user.resultClaims : {};
+  const history = isRecord(user.gameHistory) ? user.gameHistory : {};
+  const existingClaim = claims[claim.gameId];
+
+  if (existingClaim) {
+    if (!resultClaimMatches(existingClaim, claim)) return undefined;
+    if (user.currentGame !== claim.gameId) return undefined;
+    return {
+      ...user,
+      currentGame: null,
+    };
+  }
+
+  const legacyHistoryEntry = Object.values(history)
+    .find(entry => isRecord(entry) && entry.gameId === claim.gameId);
+  if (legacyHistoryEntry) {
+    if (!historyEntryMatches(legacyHistoryEntry, claim)) return undefined;
+    const playedAt = Number.isFinite(legacyHistoryEntry.playedAt)
+      ? legacyHistoryEntry.playedAt
+      : claim.playedAt;
+    return {
+      ...user,
+      currentGame: user.currentGame === claim.gameId ? null : user.currentGame,
+      resultClaims: {
+        ...claims,
+        [claim.gameId]: resultClaimMarker(claim, {
+          appliedAt: playedAt,
+          legacyHistory: true,
+          // Older clients had no tournament marker. Re-applying a score here
+          // could double-count it, so legacy results intentionally fail closed.
+          tournamentEligible: false,
+        }),
+      },
+    };
+  }
+
+  if (Object.prototype.hasOwnProperty.call(history, claim.gameId)) {
+    return undefined;
+  }
+
+  const statsField = claim.result === "win"
+    ? "wins"
+    : claim.result === "loss"
+      ? "losses"
+      : "draws";
+  if ((user[statsField] !== undefined && !Number.isFinite(user[statsField])) ||
+      (user.rating !== undefined && !Number.isFinite(user.rating))) {
+    return undefined;
+  }
+  const currentStat = user[statsField] === undefined
+    ? 0
+    : Math.max(0, Math.floor(user[statsField]));
+  const currentRating = user.rating === undefined ? 800 : user.rating;
+  const ratingChange = claim.result === "win"
+    ? 10
+    : claim.result === "loss"
+      ? -10
+      : 0;
+
+  return {
+    ...user,
+    [statsField]: currentStat + 1,
+    rating: Math.max(100, currentRating + ratingChange),
+    currentGame: user.currentGame === claim.gameId ? null : user.currentGame,
+    gameHistory: {
+      ...history,
+      [claim.gameId]: {
+        gameId: claim.gameId,
+        result: claim.result,
+        opponentUsername: claim.opponentUsername,
+        myColor: claim.myColor,
+        moveCount: claim.moveCount,
+        playedAt: claim.playedAt,
+        ratingChange,
+        timeControl: claim.timeControl,
+      },
+    },
+    resultClaims: {
+      ...claims,
+      [claim.gameId]: resultClaimMarker(claim),
+    },
+  };
+}
+
+function tournamentResultClaimMatches(stored, expected) {
+  return isRecord(stored) &&
+    stored.gameId === expected.gameId &&
+    stored.result === expected.result;
+}
+
+function applyTournamentGameResult(player, claim) {
+  if (!isRecord(player) ||
+      !normalizeFirebaseKey(claim?.gameId) ||
+      !["win", "loss", "draw"].includes(claim?.result) ||
+      !Number.isFinite(claim?.appliedAt) ||
+      claim.appliedAt < 0) {
+    return undefined;
+  }
+
+  const claims = isRecord(player.resultClaims) ? player.resultClaims : {};
+  const existingClaim = claims[claim.gameId];
+  if (existingClaim) return undefined;
+
+  const counterFields = ["score", "wins", "draws", "losses", "gamesPlayed"];
+  if (counterFields.some(field =>
+    player[field] !== undefined && !Number.isFinite(player[field])
+  )) {
+    return undefined;
+  }
+  const scoreGain = claim.result === "win" ? 2 : claim.result === "draw" ? 1 : 0;
+  return {
+    ...player,
+    score: (Number.isFinite(player.score) ? player.score : 0) + scoreGain,
+    wins: (Number.isFinite(player.wins) ? player.wins : 0) +
+      (claim.result === "win" ? 1 : 0),
+    draws: (Number.isFinite(player.draws) ? player.draws : 0) +
+      (claim.result === "draw" ? 1 : 0),
+    losses: (Number.isFinite(player.losses) ? player.losses : 0) +
+      (claim.result === "loss" ? 1 : 0),
+    gamesPlayed: (Number.isFinite(player.gamesPlayed) ? player.gamesPlayed : 0) + 1,
+    resultClaims: {
+      ...claims,
+      [claim.gameId]: {
+        gameId: claim.gameId,
+        result: claim.result,
+        appliedAt: claim.appliedAt,
+        version: 1,
+      },
+    },
+  };
+}
+
 function getGameOverReason(chessGame) {
   if (chessGame.in_checkmate()) return "checkmate";
   if (typeof chessGame.in_stalemate === "function" && chessGame.in_stalemate()) {
@@ -103,17 +366,18 @@ function getGameOverReason(chessGame) {
 }
 
 function planQueueMatch(queue, myUid) {
-  if (!queue || typeof queue !== "object") {
+  const safeUid = normalizeFirebaseKey(myUid);
+  if (!safeUid || !queue || typeof queue !== "object") {
     return { queue, opponent: null };
   }
 
   const nextQueue = { ...queue };
-  if (!nextQueue[myUid] || nextQueue[myUid].uid !== myUid) {
+  if (!nextQueue[safeUid] || nextQueue[safeUid].uid !== safeUid) {
     return { queue, opponent: null };
   }
   const entries = Object.entries(nextQueue)
     .filter(([key, entry]) =>
-      key !== myUid &&
+      key !== safeUid &&
       normalizeFirebaseKey(key) === key &&
       entry &&
       entry.uid === key
@@ -125,7 +389,7 @@ function planQueueMatch(queue, myUid) {
 
   if (!opponent) return { queue, opponent: null };
 
-  delete nextQueue[myUid];
+  delete nextQueue[safeUid];
   delete nextQueue[match.key];
   return { queue: nextQueue, opponent };
 }
@@ -291,7 +555,7 @@ const game = new Chess();
 let board = Chessboard("board", {
   draggable: false,
   position: "start",
-  pieceTheme: `pieces/${pieceSet}/{piece}.svg`,
+  pieceTheme,
 });
 
 let myColor = null;
@@ -411,11 +675,20 @@ document.getElementById("cancelBtn").onclick = () => {
 };
 
 function startSearch(tc) {
+  const safeTimeControl = normalizeTimeControl(tc);
+  if (!safeTimeControl) {
+    handleFirebaseUnavailable("Select a valid time control.");
+    return;
+  }
+
   isQueuing = true;
   document.querySelectorAll(".tc-btn").forEach(b => b.disabled = true);
   document.getElementById("playBtn").classList.remove("visible");
   document.getElementById("cancelBtn").classList.add("visible");
-  setQueueStatus(`🔍 Searching for ${TIME_CONTROLS[tc].label} game...`, true);
+  setQueueStatus(
+    `🔍 Searching for ${TIME_CONTROLS[safeTimeControl].label} game...`,
+    true
+  );
 
   waitForFirebase(() => {
     initializeFirebaseSession();
@@ -425,7 +698,7 @@ function startSearch(tc) {
       handleFirebaseUnavailable("Your account is still loading. Try Find Game again.");
       return;
     }
-    joinQueue(uid, username, tc);
+    joinQueue(uid, username, safeTimeControl);
   }, {
     onTimeout: () => handleFirebaseUnavailable(
       "Online play is unavailable. Check your connection, then try again."
@@ -508,7 +781,7 @@ function onDrop(source, target) {
 // PUSH MOVE TO FIREBASE
 // =======================
 async function runGameTransition(command) {
-  const gameId = currentGameId;
+  const gameId = normalizeFirebaseKey(currentGameId);
   if (!gameId || !window.firebaseDb) {
     return { committed: false, snapshot: null };
   }
@@ -569,19 +842,7 @@ async function requestGameFinish(reason, winner = null) {
 }
 
 function resultForFinishedGame(data) {
-  let winner = data?.winner;
-  if (winner !== "white" && winner !== "black") {
-    if (data?.result === "1-0") winner = "white";
-    else if (data?.result === "0-1") winner = "black";
-    else if (data?.resigned === "white" || data?.resigned === "black") {
-      winner = oppositeColor(data.resigned);
-    } else {
-      winner = null;
-    }
-  }
-
-  if (!winner) return "draw";
-  return winner === myColor ? "win" : "loss";
+  return resultForColor(data, myColor) || "draw";
 }
 
 function handleFinishedGame(data) {
@@ -634,13 +895,25 @@ let latestGameData = null;
 let timersStarted = false;
 
 function listenToGame(gameId) {
+  const safeGameId = normalizeFirebaseKey(gameId);
+  const safeUid = normalizeFirebaseKey(window.myUid);
+  if (!safeGameId || !safeUid) {
+    setQueueStatus("Game data could not be validated.");
+    return;
+  }
+
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
     .then(({ ref, onValue }) => {
       const db = window.firebaseDb;
 
-      onValue(ref(db, `games/${gameId}`), (snap) => {
+      onValue(ref(db, `games/${safeGameId}`), (snap) => {
         const data = snap.val();
         if (!data) return;
+        if (!["playing", "finished"].includes(data.status) ||
+            colorForUser(data, safeUid) !== myColor) {
+          setQueueStatus("Game access could not be validated.");
+          return;
+        }
 
         latestGameData = data;
         currentWhiteData = data.white;
@@ -709,7 +982,16 @@ function listenToGame(gameId) {
 // START GAME
 // =======================
 function startGame(gameId, color, tc) {
-  currentGameId = gameId;
+  const safeGameId = normalizeFirebaseKey(gameId);
+  const safeTimeControl = normalizeTimeControl(tc);
+  if (!safeGameId ||
+      !safeTimeControl ||
+      (color !== "white" && color !== "black")) {
+    setQueueStatus("Game access could not be validated.");
+    return false;
+  }
+
+  currentGameId = safeGameId;
   myColor = color;
   gameOverHandled = false;
   finishTransitionPending = false;
@@ -741,20 +1023,19 @@ function startGame(gameId, color, tc) {
     moveSpeed: 200,
     snapSpeed: 150,
     snapbackSpeed: 200,
-    pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+    pieceTheme,
     onDrop,
     onDragStart,
     onSnapbackEnd: () => clearLegalDots(),
   });
 
-  if (tc) {
-    const secs = TIME_CONTROLS[tc]?.seconds ?? 600;
-    whiteTime = secs;
-    blackTime = secs;
-    renderTimers();
-  }
+  const secs = TIME_CONTROLS[safeTimeControl].seconds;
+  whiteTime = secs;
+  blackTime = secs;
+  renderTimers();
 
-  listenToGame(gameId);
+  listenToGame(safeGameId);
+  return true;
 }
 
 // =======================
@@ -825,7 +1106,7 @@ document.getElementById("goPlayAgain").onclick = () => {
   board = Chessboard("board", {
     draggable: false,
     position: "start",
-    pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+    pieceTheme,
   });
   setQueueStatus("Select a time control to play");
 };
@@ -943,73 +1224,127 @@ async function updatePlayerBars(data) {
 // =======================
 // SAVE GAME RESULT
 // =======================
-async function saveGameResult(data, result) {
-  const { ref, set, get, push } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  const db = window.firebaseDb;
-  const myUid = window.myUid;
-  const finishedGameId = currentGameId;
-  const finishedColor = myColor;
-  const finishedTournamentId = currentTournamentId;
-  const moveCount = game.history().length;
-  if (!myUid || !finishedGameId || !finishedColor) return;
+async function saveGameResult(data, result, options = {}) {
+  const firebaseApi = options.firebaseApi ||
+    await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const { ref, runTransaction } = firebaseApi;
+  const db = options.db || window.firebaseDb;
+  const safeUid = normalizeFirebaseKey(options.uid ?? window.myUid);
+  const finishedGameId = normalizeFirebaseKey(options.gameId ?? currentGameId);
+  const finishedColor = options.color ?? myColor;
+  const canonicalResult = resultForColor(data, finishedColor);
+  const participantColor = colorForUser(data, safeUid);
+
+  if (!db ||
+      !safeUid ||
+      !finishedGameId ||
+      participantColor !== finishedColor ||
+      canonicalResult !== result) {
+    throw new Error("Finished game result could not be validated.");
+  }
 
   const opponentData = finishedColor === "white" ? data.black : data.white;
-  const opponentUsername = normalizeDisplayName(opponentData?.username, "Unknown");
-  const ratingChange = result === "win" ? 10 : result === "loss" ? -10 : 0;
-  const statsField = result === "win" ? "wins" : result === "loss" ? "losses" : "draws";
-
-  const [statSnap, ratingSnap] = await Promise.all([
-    get(ref(db, `users/${myUid}/${statsField}`)),
-    get(ref(db, `users/${myUid}/rating`)),
-  ]);
-
-  const newStat = (statSnap.val() ?? 0) + 1;
-  const newRating = Math.max(100, (ratingSnap.val() ?? 800) + ratingChange);
-  const historyKey = push(ref(db, `users/${myUid}/gameHistory`)).key;
-
-  await Promise.all([
-    set(ref(db, `users/${myUid}/${statsField}`), newStat),
-    set(ref(db, `users/${myUid}/rating`), newRating),
-    set(ref(db, `users/${myUid}/currentGame`), null),
-    set(ref(db, `users/${myUid}/gameHistory/${historyKey}`), {
-      gameId: finishedGameId,
-      result,
-      opponentUsername,
-      myColor: finishedColor,
-      moveCount,
-      playedAt: Date.now(),
-      ratingChange,
-      timeControl: data.timeControl || selectedTc || "rapid",
-    }),
-  ]);
-
-  if (finishedTournamentId) {
-    await saveTournamentResult(result, finishedTournamentId);
+  const opponentUid = normalizeFirebaseKey(opponentData?.uid);
+  if (!opponentUid || opponentUid === safeUid) {
+    throw new Error("Finished game participants could not be validated.");
   }
+
+  const finishedTournamentId = resolveTournamentContext(
+    options.tournamentId ?? currentTournamentId,
+    data
+  );
+  const now = options.now || Date.now;
+  const claim = {
+    gameId: finishedGameId,
+    result,
+    myColor: finishedColor,
+    opponentUid,
+    opponentUsername: normalizeDisplayName(opponentData?.username, "Unknown"),
+    moveCount: normalizeMoves(data.moves).length,
+    playedAt: Number.isFinite(data.finishedAt) ? data.finishedAt : now(),
+    timeControl: normalizeTimeControl(data.timeControl) ||
+      normalizeTimeControl(selectedTc) ||
+      "rapid",
+    tournamentId: finishedTournamentId,
+  };
+
+  const profileTransaction = await runTransaction(
+    ref(db, `users/${safeUid}`),
+    user => applyUserGameResult(user, claim),
+    { applyLocally: false }
+  );
+  const storedUser = profileTransaction.snapshot?.val?.();
+  const storedClaim = storedUser?.resultClaims?.[finishedGameId];
+  if (!resultClaimMatches(storedClaim, claim)) {
+    throw new Error("Game result claim conflicted with stored profile data.");
+  }
+
+  let tournamentCommitted = false;
+  if (finishedTournamentId && storedClaim.tournamentEligible === true) {
+    tournamentCommitted = await saveTournamentResult(
+      result,
+      finishedTournamentId,
+      finishedGameId,
+      {
+        firebaseApi,
+        db,
+        uid: safeUid,
+        appliedAt: storedClaim.appliedAt,
+      }
+    );
+  }
+
+  return {
+    profileCommitted: profileTransaction.committed,
+    tournamentCommitted,
+    legacyResult: storedClaim.legacyHistory === true,
+  };
 }
 
 // =======================
 // SAVE TOURNAMENT RESULT
 // =======================
-async function saveTournamentResult(result, tournamentId = currentTournamentId) {
-  const { ref, runTransaction } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  const myUid = window.myUid;
+async function saveTournamentResult(
+  result,
+  tournamentId,
+  gameId,
+  options = {}
+) {
+  const firebaseApi = options.firebaseApi ||
+    await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const { ref, runTransaction } = firebaseApi;
+  const db = options.db || window.firebaseDb;
+  const safeUid = normalizeFirebaseKey(options.uid ?? window.myUid);
   const safeTournamentId = normalizeFirebaseKey(tournamentId);
-  if (!myUid || !safeTournamentId) return;
+  const safeGameId = normalizeFirebaseKey(gameId);
+  if (!db ||
+      !safeUid ||
+      !safeTournamentId ||
+      !safeGameId ||
+      !["win", "loss", "draw"].includes(result)) {
+    throw new Error("Tournament result could not be validated.");
+  }
 
-  const scoreGain = result === "win" ? 2 : result === "draw" ? 1 : 0;
-
-  await runTransaction(ref(window.firebaseDb, `tournaments/${safeTournamentId}/players/${myUid}`), player => {
-    if (!player) return player;
-    return {
-      ...player,
-      score:       (player.score       || 0) + scoreGain,
-      wins:        (player.wins        || 0) + (result === "win"  ? 1 : 0),
-      draws:       (player.draws       || 0) + (result === "draw" ? 1 : 0),
-      losses:      (player.losses      || 0) + (result === "loss" ? 1 : 0),
-      gamesPlayed: (player.gamesPlayed || 0) + 1,
-    };
-  });
+  const claim = {
+    gameId: safeGameId,
+    result,
+    appliedAt: Number.isFinite(options.appliedAt)
+      ? options.appliedAt
+      : Date.now(),
+  };
+  const transaction = await runTransaction(
+    ref(db, `tournaments/${safeTournamentId}/players/${safeUid}`),
+    player => applyTournamentGameResult(player, claim),
+    { applyLocally: false }
+  );
+  const storedPlayer = transaction.snapshot?.val?.();
+  if (!tournamentResultClaimMatches(
+    storedPlayer?.resultClaims?.[safeGameId],
+    claim
+  )) {
+    throw new Error("Tournament result claim conflicted with stored score.");
+  }
+  return transaction.committed;
 }
 
 // =======================
@@ -1071,16 +1406,23 @@ function handleFirebaseUnavailable(message) {
 // QUEUE
 // =======================
 function joinQueue(uid, username, tc) {
+  const safeUid = normalizeFirebaseKey(uid);
+  const safeTimeControl = normalizeTimeControl(tc);
+  if (!safeUid || !safeTimeControl) {
+    handleFirebaseUnavailable("Unable to join the queue with this account.");
+    return;
+  }
+
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
     .then(async ({ ref, set, remove, onDisconnect }) => {
       const db = window.firebaseDb;
-      myQueueRef = ref(db, `queue/${tc}/${uid}`);
+      myQueueRef = ref(db, `queue/${safeTimeControl}/${safeUid}`);
       const queueRef = myQueueRef;
       await set(queueRef, {
-        uid,
+        uid: safeUid,
         username: normalizeDisplayName(username, "Player"),
         joinedAt: Date.now(),
-        tc,
+        tc: safeTimeControl,
       });
       if (!isQueuing) {
         await remove(queueRef);
@@ -1088,7 +1430,7 @@ function joinQueue(uid, username, tc) {
         return;
       }
       onDisconnect(myQueueRef).remove();
-      tryMatch(uid, username, tc);
+      tryMatch(safeUid, username, safeTimeControl);
     })
     .catch(() => {
       handleFirebaseUnavailable("Unable to join the queue. Try again.");
@@ -1096,70 +1438,162 @@ function joinQueue(uid, username, tc) {
 }
 
 function tryMatch(myUid, myUsername, tc) {
+  const safeUid = normalizeFirebaseKey(myUid);
+  const safeTimeControl = normalizeTimeControl(tc);
+  if (!safeUid || !safeTimeControl) {
+    handleFirebaseUnavailable("Unable to match this queue entry.");
+    return;
+  }
+
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
     .then(({ ref, runTransaction }) => {
       const db = window.firebaseDb;
-      const queueRef = ref(db, `queue/${tc}`);
+      const queueRef = ref(db, `queue/${safeTimeControl}`);
       let matchedOpponent = null;
 
-      runTransaction(queueRef, (queue) => {
-        const plan = planQueueMatch(queue, myUid);
+      return runTransaction(queueRef, (queue) => {
+        const plan = planQueueMatch(queue, safeUid);
         matchedOpponent = plan.opponent;
         return plan.queue;
-      }).then((result) => {
+      }).then(async (result) => {
         if (!result.committed) return;
         if (matchedOpponent) {
-          createGame(myUid, myUsername, matchedOpponent.uid, matchedOpponent.username, tc);
+          await createGame(
+            safeUid,
+            myUsername,
+            matchedOpponent.uid,
+            matchedOpponent.username,
+            safeTimeControl
+          );
         } else {
-          listenForGame(myUid, tc);
+          await listenForGame(safeUid, safeTimeControl);
         }
       });
+    })
+    .catch(() => {
+      handleFirebaseUnavailable("Unable to create or join a game. Try again.");
     });
 }
 
-function createGame(whiteUid, whiteUsername, blackUid, blackUsername, tc) {
-  import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-    .then(({ ref, set, push }) => {
-      const db = window.firebaseDb;
-      const gameRef = push(ref(db, "games"));
-      const gameId = gameRef.key;
-      const secs = TIME_CONTROLS[tc]?.seconds ?? 600;
-      const createdAt = Date.now();
+async function createGame(
+  whiteUid,
+  whiteUsername,
+  blackUid,
+  blackUsername,
+  tc,
+  options = {}
+) {
+  const safeWhiteUid = normalizeFirebaseKey(whiteUid);
+  const safeBlackUid = normalizeFirebaseKey(blackUid);
+  const safeTimeControl = normalizeTimeControl(tc);
+  if (!safeWhiteUid ||
+      !safeBlackUid ||
+      safeWhiteUid === safeBlackUid ||
+      !safeTimeControl) {
+    throw new Error("Game participants or time control are invalid.");
+  }
 
-      set(gameRef, {
-        white: { uid: whiteUid, username: normalizeDisplayName(whiteUsername, "White") },
-        black: { uid: blackUid, username: normalizeDisplayName(blackUsername, "Black") },
-        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        moves: [],
-        status: "playing",
-        timeControl: tc,
-        whiteTime: secs,
-        blackTime: secs,
-        whiteTimeMs: secs * 1000,
-        blackTimeMs: secs * 1000,
-        activeColor: "white",
-        clockUpdatedAt: createdAt,
-        createdAt,
-      });
+  const firebaseApi = options.firebaseApi ||
+    await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const { ref, update, push } = firebaseApi;
+  const db = options.db || window.firebaseDb;
+  if (!db) throw new Error("Firebase is unavailable.");
 
-      set(ref(db, `users/${whiteUid}/currentGame`), gameId);
-      set(ref(db, `users/${blackUid}/currentGame`), gameId);
-      startGame(gameId, "white", tc);
-    });
+  const gameRef = push(ref(db, "games"));
+  const gameId = normalizeFirebaseKey(gameRef.key);
+  if (!gameId) throw new Error("Firebase returned an invalid game id.");
+
+  const secs = TIME_CONTROLS[safeTimeControl].seconds;
+  const createdAt = (options.now || Date.now)();
+  const gameData = {
+    white: {
+      uid: safeWhiteUid,
+      username: normalizeDisplayName(whiteUsername, "White"),
+    },
+    black: {
+      uid: safeBlackUid,
+      username: normalizeDisplayName(blackUsername, "Black"),
+    },
+    fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    moves: [],
+    status: "playing",
+    timeControl: safeTimeControl,
+    whiteTime: secs,
+    blackTime: secs,
+    whiteTimeMs: secs * 1000,
+    blackTimeMs: secs * 1000,
+    activeColor: "white",
+    clockUpdatedAt: createdAt,
+    createdAt,
+  };
+  const updates = {
+    [`games/${gameId}`]: gameData,
+    [`users/${safeWhiteUid}/currentGame`]: gameId,
+    [`users/${safeBlackUid}/currentGame`]: gameId,
+  };
+
+  await update(ref(db), updates);
+  const start = options.startGame || startGame;
+  start(gameId, "white", safeTimeControl);
+  return gameId;
 }
 
-function listenForGame(uid, tc) {
-  import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-    .then(({ ref, onValue }) => {
-      const db = window.firebaseDb;
-      const unsub = onValue(ref(db, `users/${uid}/currentGame`), (snap) => {
-        if (snap.exists() && !currentGameId) {
-          const gameId = snap.val();
-          unsub();
-          startGame(gameId, "black", tc);
+async function listenForGame(uid, tc, options = {}) {
+  const safeUid = normalizeFirebaseKey(uid);
+  const fallbackTimeControl = normalizeTimeControl(tc);
+  if (!safeUid) {
+    throw new Error("Queue user id is invalid.");
+  }
+
+  const firebaseApi = options.firebaseApi ||
+    await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const { ref, onValue, get } = firebaseApi;
+  const db = options.db || window.firebaseDb;
+  if (!db) throw new Error("Firebase is unavailable.");
+
+  let checkingGame = false;
+  let unsubscribe = () => {};
+  unsubscribe = onValue(
+    ref(db, `users/${safeUid}/currentGame`),
+    async snap => {
+      if (!snap.exists() || currentGameId || checkingGame) return;
+
+      const gameId = normalizeFirebaseKey(snap.val());
+      if (!gameId) {
+        setQueueStatus("Matched game id could not be validated.");
+        return;
+      }
+
+      checkingGame = true;
+      try {
+        const gameSnap = await get(ref(db, `games/${gameId}`));
+        const gameData = gameSnap.val();
+        const color = colorForUser(gameData, safeUid);
+        if (!gameData ||
+            !["playing", "finished"].includes(gameData.status) ||
+            !color) {
+          setQueueStatus("Matched game access could not be validated.");
+          return;
         }
-      });
-    });
+
+        const gameTimeControl = normalizeTimeControl(gameData.timeControl) ||
+          fallbackTimeControl;
+        if (!gameTimeControl) {
+          setQueueStatus("Matched game time control could not be validated.");
+          return;
+        }
+
+        unsubscribe();
+        const start = options.startGame || startGame;
+        start(gameId, color, gameTimeControl);
+      } catch {
+        setQueueStatus("Matched game could not be loaded. Reconnecting...");
+      } finally {
+        checkingGame = false;
+      }
+    }
+  );
+  return unsubscribe;
 }
 
 // =======================
@@ -1180,9 +1614,10 @@ async function handleResign() {
 }
 
 document.getElementById("drawOfferBtn").onclick = async () => {
-  if (!currentGameId || gameOverHandled) return;
+  const gameId = normalizeFirebaseKey(currentGameId);
+  if (!gameId || gameOverHandled) return;
   const { ref, set } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  await set(ref(window.firebaseDb, `games/${currentGameId}/drawOffer`), myColor);
+  await set(ref(window.firebaseDb, `games/${gameId}/drawOffer`), myColor);
   const msg = document.getElementById("drawOfferMsg");
   msg.textContent = "Draw offer sent...";
   msg.style.color = "var(--accent)";
@@ -1200,8 +1635,10 @@ document.getElementById("acceptDrawBtn").onclick = async () => {
 };
 
 document.getElementById("declineDrawBtn").onclick = async () => {
+  const gameId = normalizeFirebaseKey(currentGameId);
+  if (!gameId) return;
   const { ref, set } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  await set(ref(window.firebaseDb, `games/${currentGameId}/drawOffer`), null);
+  await set(ref(window.firebaseDb, `games/${gameId}/drawOffer`), null);
   document.getElementById("drawOfferIncoming").classList.add("hidden");
 };
 
@@ -1230,7 +1667,7 @@ function soundForMove(move, chessGame) {
 }
 
 async function loadMyAvatar() {
-  const uid = window.myUid;
+  const uid = normalizeFirebaseKey(window.myUid);
   if (!uid) return;
   const { ref, get } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
   const snap = await get(ref(window.firebaseDb, `users/${uid}/avatarUrl`));
@@ -1256,8 +1693,12 @@ async function loadMyAvatar() {
 let authListenerRegistered = false;
 
 function colorForUser(gameData, uid) {
-  if (gameData?.white?.uid === uid) return "white";
-  if (gameData?.black?.uid === uid) return "black";
+  const safeUid = normalizeFirebaseKey(uid);
+  const whiteUid = normalizeFirebaseKey(gameData?.white?.uid);
+  const blackUid = normalizeFirebaseKey(gameData?.black?.uid);
+  if (!safeUid || !whiteUid || !blackUid || whiteUid === blackUid) return null;
+  if (whiteUid === safeUid) return "white";
+  if (blackUid === safeUid) return "black";
   return null;
 }
 
@@ -1274,13 +1715,20 @@ function initializeFirebaseSession() {
 
   window.firebaseOnAuthChanged(window.firebaseAuth, user => {
     if (!user) { window.location.href = "login.html"; return; }
+    const safeUserUid = normalizeFirebaseKey(user.uid);
+    if (!safeUserUid) {
+      handleFirebaseUnavailable("This account id could not be validated.");
+      return;
+    }
 
     import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
       .then(async ({ ref, get }) => {
         try {
-          const usernameSnap = await get(ref(window.firebaseDb, `users/${user.uid}/username`));
+          const usernameSnap = await get(
+            ref(window.firebaseDb, `users/${safeUserUid}/username`)
+          );
           const username = normalizeDisplayName(usernameSnap.val() || user.email, "Player");
-          window.myUid = user.uid;
+          window.myUid = safeUserUid;
           window.myUsername = username;
           loadMyAvatar().catch(() => {});
 
@@ -1294,7 +1742,7 @@ function initializeFirebaseSession() {
           if (challengeId) {
             const challengeSnap = await get(ref(window.firebaseDb, `games/${challengeId}`));
             const challengeGame = challengeSnap.val();
-            const challengeColor = colorForUser(challengeGame, user.uid);
+            const challengeColor = colorForUser(challengeGame, safeUserUid);
             if (!challengeGame ||
                 !["playing", "finished"].includes(challengeGame.status) ||
                 !challengeColor) {
@@ -1312,14 +1760,16 @@ function initializeFirebaseSession() {
             return;
           }
 
-          const gameSnap = await get(ref(window.firebaseDb, `users/${user.uid}/currentGame`));
+          const gameSnap = await get(
+            ref(window.firebaseDb, `users/${safeUserUid}/currentGame`)
+          );
           if (!gameSnap.exists()) return;
 
           const gameId = normalizeFirebaseKey(gameSnap.val());
           if (!gameId) return;
           const gameDataSnap = await get(ref(window.firebaseDb, `games/${gameId}`));
           const gameData = gameDataSnap.val();
-          const color = colorForUser(gameData, user.uid);
+          const color = colorForUser(gameData, safeUserUid);
           if (!gameData ||
               !["playing", "finished"].includes(gameData.status) ||
               !color) {
