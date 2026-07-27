@@ -15,12 +15,11 @@
   .settings-label { font-size: 14px; color: var(--text2); font-weight: 500; }
   .settings-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
-  .toggle input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-  .toggle-slider { position: absolute; inset: 0; background: var(--bg4); border-radius: 24px; cursor: pointer; pointer-events: none; transition: background .2s; border: 1px solid var(--border); }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: var(--bg4); border-radius: 24px; cursor: pointer; transition: background .2s; border: 1px solid var(--border); }
   .toggle-slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: var(--muted); border-radius: 50%; transition: transform .2s, background .2s; }
   .toggle input:checked + .toggle-slider { background: var(--accent); border-color: var(--accent); }
   .toggle input:checked + .toggle-slider:before { transform: translateX(20px); background: #fff; }
-  .toggle input:focus-visible + .toggle-slider { outline: 3px solid var(--accent2); outline-offset: 3px; }
   .settings-select { background: var(--bg4); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text2); font-family: 'Outfit', sans-serif; font-size: 13px; padding: 6px 10px; outline: none; cursor: pointer; }
   .settings-select:focus { border-color: var(--accent); }
   .save-btn { width: 100%; padding: 12px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius); font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity .2s; margin-top: 8px; }
@@ -44,16 +43,16 @@
       <div class="settings-row">
         <div>
           <div class="settings-label">Profile Picture</div>
-          <div class="settings-desc" id="avatarDesc">JPG or PNG, max 2MB</div>
+          <div class="settings-desc">JPG or PNG, max 2MB</div>
         </div>
         <div class="avatar-upload-wrap">
           <!-- Letter avatar fallback -->
           <div id="avatarLetter" style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;">?</div>
           <!-- Image preview (hidden until loaded) -->
-          <img id="avatarPreview" alt="Current profile picture" style="width:52px;height:52px;border-radius:50%;object-fit:cover;display:none;" />
-          <input type="file" id="avatarInput" accept="image/jpeg,image/png" aria-label="Choose profile picture" aria-describedby="avatarDesc" style="display:none" />
-          <button class="avatar-upload-btn" id="avatarUploadBtn" type="button">Upload</button>
-          <div id="avatarMsg" role="status" aria-live="polite" style="font-size:12px;min-height:16px;"></div>
+          <img id="avatarPreview" style="width:52px;height:52px;border-radius:50%;object-fit:cover;display:none;" />
+          <input type="file" id="avatarInput" accept="image/*" style="display:none" />
+          <button class="avatar-upload-btn" id="avatarUploadBtn">Upload</button>
+          <div id="avatarMsg" style="font-size:12px;min-height:16px;"></div>
         </div>
       </div>
     </div>
@@ -62,20 +61,20 @@
       <div class="settings-panel-title">Appearance</div>
       <div class="settings-row">
         <div>
-          <label class="settings-label" for="darkModeToggle">Dark Mode</label>
-          <div class="settings-desc" id="darkModeDesc">Use dark theme across the site</div>
+          <div class="settings-label">Dark Mode</div>
+          <div class="settings-desc">Use dark theme across the site</div>
         </div>
-        <label class="toggle" for="darkModeToggle">
-          <input type="checkbox" id="darkModeToggle" aria-describedby="darkModeDesc" checked />
+        <label class="toggle">
+          <input type="checkbox" id="darkModeToggle" checked />
           <span class="toggle-slider"></span>
         </label>
       </div>
       <div class="settings-row">
         <div>
-          <label class="settings-label" for="boardTheme">Board Theme</label>
-          <div class="settings-desc" id="boardThemeDesc">Choose your board color style</div>
+          <div class="settings-label">Board Theme</div>
+          <div class="settings-desc">Choose your board color style</div>
         </div>
-        <select class="settings-select" id="boardTheme" aria-describedby="boardThemeDesc">
+        <select class="settings-select" id="boardTheme">
           <option value="classic">Classic</option>
           <option value="green">Green</option>
           <option value="blue">Blue</option>
@@ -84,10 +83,10 @@
       </div>
       <div class="settings-row">
   <div>
-    <label class="settings-label" for="pieceSet">Piece Set</label>
-    <div class="settings-desc" id="pieceSetDesc">Choose your piece style</div>
+    <div class="settings-label">Piece Set</div>
+    <div class="settings-desc">Choose your piece style</div>
   </div>
-  <select class="settings-select" id="pieceSet" aria-describedby="pieceSetDesc">
+  <select class="settings-select" id="pieceSet">
     <option value="staunty">Staunty</option>
 <option value="cburnett">Cburnett</option>
 <option value="maestro">Maestro</option>
@@ -126,31 +125,31 @@
       <div class="settings-panel-title">Game</div>
       <div class="settings-row">
         <div>
-          <label class="settings-label" for="soundToggle">Sound Effects</label>
-          <div class="settings-desc" id="soundDesc">Play sounds on moves and captures</div>
+          <div class="settings-label">Sound Effects</div>
+          <div class="settings-desc">Play sounds on moves and captures</div>
         </div>
-        <label class="toggle" for="soundToggle">
-          <input type="checkbox" id="soundToggle" aria-describedby="soundDesc" checked />
+        <label class="toggle">
+          <input type="checkbox" id="soundToggle" checked />
           <span class="toggle-slider"></span>
         </label>
       </div>
       <div class="settings-row">
         <div>
-          <label class="settings-label" for="legalMovesToggle">Show Legal Moves</label>
-          <div class="settings-desc" id="legalMovesDesc">Highlight squares you can move to</div>
+          <div class="settings-label">Show Legal Moves</div>
+          <div class="settings-desc">Highlight squares you can move to</div>
         </div>
-        <label class="toggle" for="legalMovesToggle">
-          <input type="checkbox" id="legalMovesToggle" aria-describedby="legalMovesDesc" checked />
+        <label class="toggle">
+          <input type="checkbox" id="legalMovesToggle" checked />
           <span class="toggle-slider"></span>
         </label>
       </div>
       <div class="settings-row">
         <div>
-          <label class="settings-label" for="animationToggle">Piece Animation</label>
-          <div class="settings-desc" id="animationDesc">Animate piece movement on the board</div>
+          <div class="settings-label">Piece Animation</div>
+          <div class="settings-desc">Animate piece movement on the board</div>
         </div>
-        <label class="toggle" for="animationToggle">
-          <input type="checkbox" id="animationToggle" aria-describedby="animationDesc" checked />
+        <label class="toggle">
+          <input type="checkbox" id="animationToggle" checked />
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -160,18 +159,18 @@
       <div class="settings-panel-title">Account</div>
       <div class="settings-row">
         <div>
-          <label class="settings-label" for="emailNotifToggle">Email Notifications</label>
-          <div class="settings-desc" id="emailNotifDesc">Receive updates and game invites</div>
+          <div class="settings-label">Email Notifications</div>
+          <div class="settings-desc">Receive updates and game invites</div>
         </div>
-        <label class="toggle" for="emailNotifToggle">
-          <input type="checkbox" id="emailNotifToggle" aria-describedby="emailNotifDesc" />
+        <label class="toggle">
+          <input type="checkbox" id="emailNotifToggle" />
           <span class="toggle-slider"></span>
         </label>
       </div>
     </div>
 
-    <button class="save-btn" id="saveBtn" type="button">Save Settings</button>
-    <div class="save-msg" id="saveMsg" role="status" aria-live="polite"></div>
+    <button class="save-btn" id="saveBtn">Save Settings</button>
+    <div class="save-msg" id="saveMsg"></div>
   </div>
 </main>
 
@@ -190,19 +189,6 @@
 
   const CLOUD_NAME    = "dszgbkb1f";
   const UPLOAD_PRESET = "faithchess_avatars";
-  const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
-  const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
-
-  function isAllowedAvatarUrl(value) {
-    try {
-      const url = new URL(String(value));
-      return url.protocol === "https:"
-        && url.hostname === "res.cloudinary.com"
-        && url.pathname.startsWith(`/${CLOUD_NAME}/image/upload/`);
-    } catch {
-      return false;
-    }
-  }
 
   const firebaseConfig = {
     apiKey: "AIzaSyAUdXVlmN9xhhIzubK0MTtGO3hA9JkHClA",
@@ -232,12 +218,11 @@
       get(ref(db, `users/${user.uid}/username`)),
     ]);
 
-    const username = String(usernameSnap.val() || "?");
+    const username = usernameSnap.val() || "?";
     letterEl.textContent = username[0].toUpperCase();
 
-    const savedAvatarUrl = avatarSnap.val();
-    if (isAllowedAvatarUrl(savedAvatarUrl)) {
-      preview.src = savedAvatarUrl;
+    if (avatarSnap.val()) {
+      preview.src = avatarSnap.val();
       preview.style.display = "block";
       letterEl.style.display = "none";
     }
@@ -248,17 +233,9 @@
       const file = input.files[0];
       if (!file) return;
 
-      if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-        msg.textContent = "Choose a JPG or PNG image.";
-        msg.style.color = "#e05c5c";
-        input.value = "";
-        return;
-      }
-
-      if (file.size > MAX_AVATAR_BYTES) {
+      if (file.size > 2 * 1024 * 1024) {
         msg.textContent = "File too large (max 2MB)";
         msg.style.color = "#e05c5c";
-        input.value = "";
         return;
       }
 
@@ -275,27 +252,24 @@
           method: "POST",
           body: formData,
         });
-        if (!res.ok) throw new Error("avatar_upload_failed");
-
         const data = await res.json();
-        const avatarUrl = data.secure_url;
-        if (!isAllowedAvatarUrl(avatarUrl)) throw new Error("invalid_avatar_url");
 
-        await set(ref(db, `users/${user.uid}/avatarUrl`), avatarUrl);
+        if (!data.secure_url) throw new Error(data.error?.message || "Upload failed");
 
-        preview.src = avatarUrl;
+        await set(ref(db, `users/${user.uid}/avatarUrl`), data.secure_url);
+
+        preview.src = data.secure_url;
         preview.style.display = "block";
         letterEl.style.display = "none";
 
         msg.textContent = "✓ Picture updated!";
         msg.style.color = "#4caf7d";
       } catch (e) {
-        console.error("Avatar upload failed", e);
-        msg.textContent = "Upload failed. Please try again.";
+        console.error(e);
+        msg.textContent = "Upload failed: " + e.message;
         msg.style.color = "#e05c5c";
       } finally {
         uploadBtn.disabled = false;
-        input.value = "";
       }
     });
   });

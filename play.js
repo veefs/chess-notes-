@@ -1,6 +1,5 @@
 const settings = window.getSettings ? window.getSettings() : {};
 const pieceSet = settings.pieceSet || "cburnett";
-const pieceTheme = resolveLocalPieceTheme(pieceSet);
 
 // =======================
 // TIME CONTROLS
@@ -10,595 +9,15 @@ const TIME_CONTROLS = {
   blitz: { label: "Blitz", seconds: 300 },
   rapid: { label: "Rapid", seconds: 600 },
 };
-
-const FIREBASE_READY_TIMEOUT_MS = 8000;
-const FIREBASE_POLL_INTERVAL_MS = 50;
-const FINISH_REASONS = new Set([
-  "checkmate",
-  "timeout",
-  "stalemate",
-  "repetition",
-  "insufficient",
-  "drawRule",
-  "draw",
-  "resign",
-]);
-const DRAW_REASONS = new Set([
-  "stalemate",
-  "repetition",
-  "insufficient",
-  "drawRule",
-  "draw",
-]);
-
-function normalizeDisplayName(value, fallback) {
-  if (typeof value !== "string") return fallback;
-  const normalized = value.trim();
-  return normalized ? normalized.slice(0, 80) : fallback;
-}
-
-function resolveLocalPieceTheme(selectedPieceSet) {
-  const fallback = "pieces/cburnett/{piece}.svg";
-  try {
-    const candidate = typeof window.resolvePieceTheme === "function"
-      ? window.resolvePieceTheme(selectedPieceSet)
-      : fallback;
-    if (typeof candidate !== "string" || !candidate.includes("{piece}")) {
-      return fallback;
-    }
-
-    const base = new URL(window.location.href);
-    const parsed = new URL(candidate, base);
-    if (parsed.origin !== base.origin ||
-        !["https:", "http:"].includes(parsed.protocol)) {
-      return fallback;
-    }
-    return candidate;
-  } catch {
-    return fallback;
-  }
-}
-
-function normalizeFirebaseKey(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim();
-  if (normalized !== value ||
-      !normalized ||
-      normalized.length > 160 ||
-      /[.#$[\]/\u0000-\u001F\u007F]/.test(normalized) ||
-      ["__proto__", "constructor", "prototype"].includes(normalized)) {
-    return null;
-  }
-  return normalized;
-}
-
-function normalizeTimeControl(value) {
-  return typeof value === "string" &&
-    Object.prototype.hasOwnProperty.call(TIME_CONTROLS, value)
-    ? value
-    : null;
-}
-
-function resolveGameTimeControl(gameData) {
-  if (!isRecord(gameData)) return null;
-  if (gameData.timeControl == null) return "rapid";
-  return normalizeTimeControl(gameData.timeControl);
-}
-
-function withResolvedGameTimeControl(gameData) {
-  const timeControl = resolveGameTimeControl(gameData);
-  if (!timeControl) return null;
-  if (gameData.timeControl === timeControl) return gameData;
-  return {
-    ...gameData,
-    timeControl,
-  };
-}
-
-function safeAvatarUrl(value, baseHref = window.location.href) {
-  if (typeof value !== "string" || value.length > 2048) return null;
-  const normalized = value.trim();
-  if (!normalized) return null;
-
-  try {
-    const base = new URL(baseHref);
-    const parsed = new URL(normalized, base);
-    const isLoopback = hostname =>
-      ["localhost", "127.0.0.1", "[::1]"].includes(hostname);
-    const sameOrigin = parsed.origin === base.origin;
-    const trustedSameOrigin = sameOrigin && (
-      parsed.protocol === "https:" ||
-      (parsed.protocol === "http:" && isLoopback(parsed.hostname))
-    );
-    const trustedCloudinary = parsed.protocol === "https:" &&
-      parsed.hostname === "res.cloudinary.com" &&
-      !parsed.port;
-
-    if ((!trustedSameOrigin && !trustedCloudinary) ||
-        parsed.username ||
-        parsed.password) {
-      return null;
-    }
-
-    return parsed.href;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeMoves(moves) {
-  if (!moves) return [];
-  const values = Array.isArray(moves) ? moves : Object.values(moves);
-  return values.filter(move => typeof move === "string");
-}
-
-function sameMoves(left, right) {
-  return left.length === right.length &&
-    left.every((move, index) => move === right[index]);
-}
-
-function oppositeColor(color) {
-  return color === "white" ? "black" : "white";
-}
-
-function resolveTournamentContext(urlTournamentId, gameData) {
-  if (gameData && typeof gameData === "object") {
-    return normalizeFirebaseKey(gameData.tournamentId);
-  }
-  return normalizeFirebaseKey(urlTournamentId);
-}
-
-function isRecord(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function resultForColor(data, color) {
-  if (!data || data.status !== "finished" ||
-      (color !== "white" && color !== "black")) {
-    return null;
-  }
-
-  const declaredWinner = data.winner;
-  if (declaredWinner != null &&
-      declaredWinner !== "white" &&
-      declaredWinner !== "black") {
-    return null;
-  }
-
-  let resultWinner = null;
-  if (data.result === "1-0") resultWinner = "white";
-  else if (data.result === "0-1") resultWinner = "black";
-  else if (data.result !== "1/2-1/2" && data.result != null) return null;
-
-  if (declaredWinner && data.result != null &&
-      declaredWinner !== resultWinner) {
-    return null;
-  }
-
-  let winner = declaredWinner || resultWinner;
-  if (!winner && data.result == null) {
-    if (data.resigned === "white" || data.resigned === "black") {
-      winner = oppositeColor(data.resigned);
-    } else if (!DRAW_REASONS.has(data.finishReason) && !data.drawAccepted) {
-      return null;
-    }
-  }
-  if (!winner) return "draw";
-  return winner === color ? "win" : "loss";
-}
-
-function resultClaimMatches(stored, expected) {
-  return isRecord(stored) &&
-    stored.gameId === expected.gameId &&
-    stored.result === expected.result &&
-    stored.myColor === expected.myColor &&
-    stored.opponentUid === expected.opponentUid &&
-    (stored.tournamentId || null) === (expected.tournamentId || null);
-}
-
-function historyEntryMatches(entry, expected) {
-  return isRecord(entry) &&
-    entry.gameId === expected.gameId &&
-    entry.result === expected.result &&
-    entry.myColor === expected.myColor;
-}
-
-function resultClaimMarker(claim, overrides = {}) {
-  return {
-    gameId: claim.gameId,
-    result: claim.result,
-    myColor: claim.myColor,
-    opponentUid: claim.opponentUid,
-    tournamentId: claim.tournamentId || null,
-    appliedAt: claim.playedAt,
-    tournamentEligible: true,
-    version: 1,
-    ...overrides,
-  };
-}
-
-function applyUserGameResult(user, claim) {
-  if (!isRecord(user) ||
-      !normalizeFirebaseKey(claim?.gameId) ||
-      !normalizeFirebaseKey(claim?.opponentUid) ||
-      (claim?.tournamentId != null &&
-        !normalizeFirebaseKey(claim?.tournamentId)) ||
-      !["win", "loss", "draw"].includes(claim?.result) ||
-      !["white", "black"].includes(claim?.myColor) ||
-      !Number.isFinite(claim?.playedAt) ||
-      claim.playedAt < 0 ||
-      !Number.isInteger(claim?.moveCount) ||
-      claim.moveCount < 0 ||
-      !normalizeTimeControl(claim?.timeControl)) {
-    return undefined;
-  }
-
-  const claims = isRecord(user.resultClaims) ? user.resultClaims : {};
-  const history = isRecord(user.gameHistory) ? user.gameHistory : {};
-  const existingClaim = claims[claim.gameId];
-
-  if (existingClaim) {
-    if (!resultClaimMatches(existingClaim, claim)) return undefined;
-    if (user.currentGame !== claim.gameId) return undefined;
-    return {
-      ...user,
-      currentGame: null,
-    };
-  }
-
-  const legacyHistoryEntry = Object.values(history)
-    .find(entry => isRecord(entry) && entry.gameId === claim.gameId);
-  if (legacyHistoryEntry) {
-    if (!historyEntryMatches(legacyHistoryEntry, claim)) return undefined;
-    const playedAt = Number.isFinite(legacyHistoryEntry.playedAt)
-      ? legacyHistoryEntry.playedAt
-      : claim.playedAt;
-    return {
-      ...user,
-      currentGame: user.currentGame === claim.gameId ? null : user.currentGame,
-      resultClaims: {
-        ...claims,
-        [claim.gameId]: resultClaimMarker(claim, {
-          appliedAt: playedAt,
-          legacyHistory: true,
-          // Older clients had no tournament marker. Re-applying a score here
-          // could double-count it, so legacy results intentionally fail closed.
-          tournamentEligible: false,
-        }),
-      },
-    };
-  }
-
-  if (Object.prototype.hasOwnProperty.call(history, claim.gameId)) {
-    return undefined;
-  }
-
-  const statsField = claim.result === "win"
-    ? "wins"
-    : claim.result === "loss"
-      ? "losses"
-      : "draws";
-  if ((user[statsField] !== undefined && !Number.isFinite(user[statsField])) ||
-      (user.rating !== undefined && !Number.isFinite(user.rating))) {
-    return undefined;
-  }
-  const currentStat = user[statsField] === undefined
-    ? 0
-    : Math.max(0, Math.floor(user[statsField]));
-  const currentRating = user.rating === undefined ? 800 : user.rating;
-  const ratingChange = claim.result === "win"
-    ? 10
-    : claim.result === "loss"
-      ? -10
-      : 0;
-
-  return {
-    ...user,
-    [statsField]: currentStat + 1,
-    rating: Math.max(100, currentRating + ratingChange),
-    currentGame: user.currentGame === claim.gameId ? null : user.currentGame,
-    gameHistory: {
-      ...history,
-      [claim.gameId]: {
-        gameId: claim.gameId,
-        result: claim.result,
-        opponentUsername: claim.opponentUsername,
-        myColor: claim.myColor,
-        moveCount: claim.moveCount,
-        playedAt: claim.playedAt,
-        ratingChange,
-        timeControl: claim.timeControl,
-      },
-    },
-    resultClaims: {
-      ...claims,
-      [claim.gameId]: resultClaimMarker(claim),
-    },
-  };
-}
-
-function tournamentResultClaimMatches(stored, expected) {
-  return isRecord(stored) &&
-    stored.gameId === expected.gameId &&
-    stored.result === expected.result;
-}
-
-function applyTournamentGameResult(player, claim) {
-  if (!isRecord(player) ||
-      !normalizeFirebaseKey(claim?.gameId) ||
-      !["win", "loss", "draw"].includes(claim?.result) ||
-      !Number.isFinite(claim?.appliedAt) ||
-      claim.appliedAt < 0) {
-    return undefined;
-  }
-
-  const claims = isRecord(player.resultClaims) ? player.resultClaims : {};
-  const existingClaim = claims[claim.gameId];
-  if (existingClaim) return undefined;
-
-  const counterFields = ["score", "wins", "draws", "losses", "gamesPlayed"];
-  if (counterFields.some(field =>
-    player[field] !== undefined && !Number.isFinite(player[field])
-  )) {
-    return undefined;
-  }
-  const scoreGain = claim.result === "win" ? 2 : claim.result === "draw" ? 1 : 0;
-  return {
-    ...player,
-    score: (Number.isFinite(player.score) ? player.score : 0) + scoreGain,
-    wins: (Number.isFinite(player.wins) ? player.wins : 0) +
-      (claim.result === "win" ? 1 : 0),
-    draws: (Number.isFinite(player.draws) ? player.draws : 0) +
-      (claim.result === "draw" ? 1 : 0),
-    losses: (Number.isFinite(player.losses) ? player.losses : 0) +
-      (claim.result === "loss" ? 1 : 0),
-    gamesPlayed: (Number.isFinite(player.gamesPlayed) ? player.gamesPlayed : 0) + 1,
-    resultClaims: {
-      ...claims,
-      [claim.gameId]: {
-        gameId: claim.gameId,
-        result: claim.result,
-        appliedAt: claim.appliedAt,
-        version: 1,
-      },
-    },
-  };
-}
-
-function getGameOverReason(chessGame) {
-  if (chessGame.in_checkmate()) return "checkmate";
-  if (typeof chessGame.in_stalemate === "function" && chessGame.in_stalemate()) {
-    return "stalemate";
-  }
-  if (typeof chessGame.insufficient_material === "function" &&
-      chessGame.insufficient_material()) {
-    return "insufficient";
-  }
-  if (typeof chessGame.in_threefold_repetition === "function" &&
-      chessGame.in_threefold_repetition()) {
-    return "repetition";
-  }
-  return "drawRule";
-}
-
-function planQueueMatch(queue, myUid) {
-  const safeUid = normalizeFirebaseKey(myUid);
-  if (!safeUid || !queue || typeof queue !== "object") {
-    return { queue, opponent: null };
-  }
-
-  const nextQueue = { ...queue };
-  if (!nextQueue[safeUid] || nextQueue[safeUid].uid !== safeUid) {
-    return { queue, opponent: null };
-  }
-  const entries = Object.entries(nextQueue)
-    .filter(([key, entry]) =>
-      key !== safeUid &&
-      normalizeFirebaseKey(key) === key &&
-      entry &&
-      entry.uid === key
-    )
-    .map(([key, entry]) => ({ key, entry }))
-    .sort((a, b) => (a.entry.joinedAt || 0) - (b.entry.joinedAt || 0));
-  const match = entries[0] || null;
-  const opponent = match?.entry || null;
-
-  if (!opponent) return { queue, opponent: null };
-
-  delete nextQueue[safeUid];
-  delete nextQueue[match.key];
-  return { queue: nextQueue, opponent };
-}
-
-function clockFromGameData(data, now = Date.now()) {
-  const normalizedData = withResolvedGameTimeControl(data);
-  if (!normalizedData) return null;
-
-  const timeControl = normalizedData.timeControl;
-  const fallbackSeconds = TIME_CONTROLS[timeControl].seconds;
-  const storedWhiteSeconds = Number.isFinite(normalizedData.whiteTime)
-    ? normalizedData.whiteTime
-    : fallbackSeconds;
-  const storedBlackSeconds = Number.isFinite(normalizedData.blackTime)
-    ? normalizedData.blackTime
-    : fallbackSeconds;
-  const whiteTimeMs = Number.isFinite(normalizedData.whiteTimeMs)
-    ? Math.max(0, normalizedData.whiteTimeMs)
-    : Math.max(0, storedWhiteSeconds) * 1000;
-  const blackTimeMs = Number.isFinite(normalizedData.blackTimeMs)
-    ? Math.max(0, normalizedData.blackTimeMs)
-    : Math.max(0, storedBlackSeconds) * 1000;
-  const moves = normalizeMoves(normalizedData.moves);
-  const activeColor = normalizedData.activeColor === "black" ||
-    normalizedData.activeColor === "white"
-    ? normalizedData.activeColor
-    : (moves.length % 2 === 0 ? "white" : "black");
-  // Legacy games have remaining seconds but no clockUpdatedAt. Their createdAt
-  // is not a clock baseline; begin timing those stored seconds from this read.
-  const updatedAt = Number.isFinite(normalizedData.clockUpdatedAt)
-    ? normalizedData.clockUpdatedAt
-    : (Number.isFinite(now) ? now : Date.now());
-
-  return {
-    whiteTimeMs,
-    blackTimeMs,
-    activeColor,
-    updatedAt,
-    timeControl,
-  };
-}
-
-function monotonicGameTime(data, now = Date.now()) {
-  // This prevents accidental backward movement only. Authoritative server time
-  // is still required to stop a malicious client from submitting a future time.
-  const candidateNow = Number.isFinite(now) ? now : Date.now();
-  const priorUpdatedAt = Number.isFinite(data?.clockUpdatedAt)
-    ? data.clockUpdatedAt
-    : candidateNow;
-  return Math.max(candidateNow, priorUpdatedAt);
-}
-
-function projectClock(clock, now = Date.now()) {
-  if (!clock) return null;
-
-  const projected = { ...clock };
-  const effectiveNow = monotonicGameTime(
-    { clockUpdatedAt: clock.updatedAt },
-    now
-  );
-  const elapsed = Math.max(0, effectiveNow - clock.updatedAt);
-  if (clock.activeColor === "white") {
-    projected.whiteTimeMs = Math.max(0, clock.whiteTimeMs - elapsed);
-  } else {
-    projected.blackTimeMs = Math.max(0, clock.blackTimeMs - elapsed);
-  }
-  projected.updatedAt = effectiveNow;
-  return projected;
-}
-
-function withClockFields(data, clock) {
-  if (!clock) return data;
-  return {
-    ...data,
-    whiteTimeMs: Math.round(clock.whiteTimeMs),
-    blackTimeMs: Math.round(clock.blackTimeMs),
-    whiteTime: Math.ceil(clock.whiteTimeMs / 1000),
-    blackTime: Math.ceil(clock.blackTimeMs / 1000),
-    activeColor: clock.activeColor,
-    clockUpdatedAt: clock.updatedAt,
-    timeControl: clock.timeControl,
-  };
-}
-
-function finishedGameState(current, reason, winner, now, clock) {
-  const effectiveNow = monotonicGameTime(current, now);
-  const finishedClock = clock
-    ? {
-        ...clock,
-        updatedAt: Math.max(clock.updatedAt, effectiveNow),
-      }
-    : clock;
-  const result = winner === "white"
-    ? "1-0"
-    : winner === "black"
-      ? "0-1"
-      : "1/2-1/2";
-
-  return withClockFields({
-    ...current,
-    status: "finished",
-    finishReason: reason,
-    winner: winner || null,
-    result,
-    finishedAt: effectiveNow,
-    drawOffer: null,
-  }, finishedClock);
-}
-
-function transitionGameState(current, command, now = Date.now()) {
-  if (!current || current.status !== "playing" || !command) return null;
-
-  const effectiveNow = monotonicGameTime(current, now);
-  const clock = projectClock(
-    clockFromGameData(current, effectiveNow),
-    effectiveNow
-  );
-  if (!clock) return null;
-
-  if (command.type === "move") {
-    const remoteMoves = normalizeMoves(current.moves);
-    const previousMoves = normalizeMoves(command.previousMoves);
-    const nextMoves = normalizeMoves(command.moves);
-    if (!sameMoves(remoteMoves, previousMoves) ||
-        nextMoves.length !== previousMoves.length + 1 ||
-        !sameMoves(previousMoves, nextMoves.slice(0, -1))) {
-      return null;
-    }
-
-    const activeTime = clock.activeColor === "white"
-      ? clock.whiteTimeMs
-      : clock.blackTimeMs;
-    if (activeTime <= 0) {
-      return finishedGameState(
-        current,
-        "timeout",
-        oppositeColor(clock.activeColor),
-        effectiveNow,
-        clock
-      );
-    }
-    clock.activeColor = oppositeColor(clock.activeColor);
-    clock.updatedAt = effectiveNow;
-
-    return withClockFields({
-      ...current,
-      moves: nextMoves,
-      fen: command.fen,
-    }, clock);
-  }
-
-  if (command.type !== "finish" || !FINISH_REASONS.has(command.reason)) {
-    return null;
-  }
-
-  let winner = command.winner;
-  if (command.reason === "timeout") {
-    if (!clock) return null;
-    const activeTime = clock.activeColor === "white"
-      ? clock.whiteTimeMs
-      : clock.blackTimeMs;
-    if (activeTime > 0) return null;
-    winner = oppositeColor(clock.activeColor);
-  } else if (command.reason === "resign") {
-    if (command.actorColor !== "white" && command.actorColor !== "black") {
-      return null;
-    }
-    winner = oppositeColor(command.actorColor);
-  } else if (command.reason === "draw") {
-    if ((command.actorColor !== "white" && command.actorColor !== "black") ||
-        (current.drawOffer !== "white" && current.drawOffer !== "black") ||
-        current.drawOffer === command.actorColor) {
-      return null;
-    }
-    winner = null;
-  } else if (DRAW_REASONS.has(command.reason)) {
-    winner = null;
-  } else if (winner !== "white" && winner !== "black") {
-    return null;
-  }
-
-  return finishedGameState(
-    current,
-    command.reason,
-    winner,
-    effectiveNow,
-    clock
-  );
-}
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 let selectedTc = null;
 let isQueuing = false;
 let myQueueRef = null;
+let currentGameUnsub = null;
+let claimInFlight = false;
+let claimAttemptPromise = null;
+let currentTournamentId = null;
 
 // =======================
 // BOARD + GAME
@@ -610,14 +29,13 @@ const game = new Chess();
 let board = Chessboard("board", {
   draggable: false,
   position: "start",
-  pieceTheme,
+  pieceTheme: `pieces/${pieceSet}/{piece}.svg`,
 });
 
 let myColor = null;
 let currentGameId = null;
-let currentTournamentId = null;
 let gameOverHandled = false;
-let finishTransitionPending = false;
+let currentTimeControl = null;
 
 // =======================
 // TIMERS
@@ -626,12 +44,21 @@ let whiteTime = 0;
 let blackTime = 0;
 let timerInterval = null;
 let activeTimer = null;
-let clockSnapshot = null;
+let clockWriteInFlight = false;
 
 function formatTime(sec) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function readClock(data, color, fallback) {
+  const nested = data?.clocks?.[color];
+  const legacy = data?.[`${color}Time`];
+  const value = Number.isFinite(nested) ? nested : legacy;
+  return Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : fallback;
 }
 
 function renderTimers() {
@@ -643,7 +70,7 @@ function renderTimers() {
   const myTime = myColor === "black" ? blackTime : whiteTime;
   const oppTime = myColor === "black" ? whiteTime : blackTime;
   const myActive = activeTimer === myColor;
-  const oppActive = Boolean(activeTimer) && activeTimer !== myColor;
+  const oppActive = !myActive;
 
   myTimerEl.textContent = formatTime(myTime);
   myTimerEl.className = "bar-timer" +
@@ -656,55 +83,65 @@ function renderTimers() {
     (oppTime <= 10 && oppActive ? " low" : "");
 }
 
-function renderClockTick(now = Date.now()) {
-  if (!clockSnapshot) return;
-  const projected = projectClock(clockSnapshot, now);
-  whiteTime = Math.ceil(projected.whiteTimeMs / 1000);
-  blackTime = Math.ceil(projected.blackTimeMs / 1000);
-  activeTimer = projected.activeColor;
+function startTimers(data) {
+  if (timerInterval) clearInterval(timerInterval);
+
+  if (data?.position?.turnUid === data?.white?.uid) activeTimer = "white";
+  else if (data?.position?.turnUid === data?.black?.uid) activeTimer = "black";
+  else activeTimer = game.turn() === "w" ? "white" : "black";
+
+  const defaultTime = TIME_CONTROLS[data?.timeControl]?.seconds ?? 600;
+  whiteTime = readClock(data, "white", defaultTime);
+  blackTime = readClock(data, "black", defaultTime);
+
   renderTimers();
 
-  const activeTime = activeTimer === "white"
-    ? projected.whiteTimeMs
-    : projected.blackTimeMs;
-  if (activeTime <= 0 && !gameOverHandled && !finishTransitionPending) {
-    handleTimeout();
+  timerInterval = setInterval(() => {
+    if (activeTimer === "white") whiteTime--;
+    else blackTime--;
+
+    if (whiteTime <= 0 || blackTime <= 0) {
+      clearInterval(timerInterval);
+      const winner = whiteTime <= 0 ? "black" : "white";
+      handleTimeout(winner);
+      return;
+    }
+
+    renderTimers();
+    pushTimes();
+  }, 1000);
+}
+
+async function pushTimes() {
+  if (
+    !currentGameId
+    || !myColor
+    || activeTimer !== myColor
+    || clockWriteInFlight
+  ) {
+    return;
+  }
+
+  clockWriteInFlight = true;
+  const gameId = currentGameId;
+  const color = myColor;
+  const value = color === "white" ? whiteTime : blackTime;
+  try {
+    const { ref, set } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+    await set(ref(window.firebaseDb, `games/${gameId}/clocks/${color}`), value);
+  } catch (error) {
+    console.warn("Clock update rejected:", error);
+  } finally {
+    clockWriteInFlight = false;
   }
 }
 
-function syncClockSnapshot(data) {
-  const nextClock = clockFromGameData(data);
-  if (!nextClock) return false;
-  clockSnapshot = nextClock;
-  renderClockTick();
-  return true;
-}
-
-function startTimers(data) {
-  if (!syncClockSnapshot(data)) return false;
-  if (timerInterval) clearInterval(timerInterval);
-  timerInterval = setInterval(renderClockTick, 250);
-  return true;
-}
-
-function advanceLocalClock(nextActiveColor) {
-  if (!clockSnapshot) return;
-  const now = Date.now();
-  const projected = projectClock(clockSnapshot, now);
-  clockSnapshot = {
-    ...projected,
-    activeColor: nextActiveColor,
-    updatedAt: projected.updatedAt,
-  };
-  renderClockTick(projected.updatedAt);
-}
-
-function handleTimeout() {
-  if (gameOverHandled || finishTransitionPending) return;
-  requestGameFinish("timeout").catch(() => {
-    const msg = document.getElementById("drawOfferMsg");
-    if (msg) msg.textContent = "Unable to confirm timeout. Reconnecting...";
-  });
+function handleTimeout(winner) {
+  if (gameOverHandled) return;
+  gameOverHandled = true;
+  const result = (winner === myColor) ? "win" : "loss";
+  showGameOver(result, "timeout");
+  saveGameResult({ white: currentWhiteData, black: currentBlackData }, result);
 }
 
 // =======================
@@ -729,42 +166,25 @@ document.getElementById("playBtn").onclick = () => {
 };
 
 document.getElementById("cancelBtn").onclick = () => {
-  cancelQueue();
+  void cancelQueue();
 };
 
 function startSearch(tc) {
-  const safeTimeControl = normalizeTimeControl(tc);
-  if (!safeTimeControl) {
-    handleFirebaseUnavailable("Select a valid time control.");
-    return;
-  }
-
   isQueuing = true;
   document.querySelectorAll(".tc-btn").forEach(b => b.disabled = true);
   document.getElementById("playBtn").classList.remove("visible");
   document.getElementById("cancelBtn").classList.add("visible");
-  setQueueStatus(
-    `🔍 Searching for ${TIME_CONTROLS[safeTimeControl].label} game...`,
-    true
-  );
+  setQueueStatus(`🔍 Searching for ${TIME_CONTROLS[tc].label} game...`, true);
 
   waitForFirebase(() => {
-    initializeFirebaseSession();
     const uid = window.myUid;
     const username = window.myUsername;
-    if (!uid) {
-      handleFirebaseUnavailable("Your account is still loading. Try Find Game again.");
-      return;
-    }
-    joinQueue(uid, username, safeTimeControl);
-  }, {
-    onTimeout: () => handleFirebaseUnavailable(
-      "Online play is unavailable. Check your connection, then try again."
-    ),
+    if (!uid) return;
+    joinQueue(uid, username, tc);
   });
 }
 
-function cancelQueue() {
+async function cancelQueue() {
   isQueuing = false;
   document.querySelectorAll(".tc-btn").forEach(b => b.disabled = false);
   document.getElementById("cancelBtn").classList.remove("visible");
@@ -774,10 +194,28 @@ function cancelQueue() {
     : "Select a time control to play"
   );
 
+  const pendingClaim = claimAttemptPromise;
+  if (pendingClaim) {
+    try {
+      await pendingClaim;
+    } catch (error) {
+      console.warn("Match attempt ended during cancellation:", error);
+    }
+  }
+
   if (myQueueRef) {
-    import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-      .then(({ remove }) => remove(myQueueRef));
+    const queueRef = myQueueRef;
     myQueueRef = null;
+    try {
+      const { remove } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+      await remove(queueRef);
+    } catch (error) {
+      console.warn("Could not remove queue entry:", error);
+    }
+  }
+  if (currentGameUnsub) {
+    currentGameUnsub();
+    currentGameUnsub = null;
   }
 }
 
@@ -792,7 +230,7 @@ function setQueueStatus(msg, searching = false) {
 // DRAG GUARDS
 // =======================
 function onDragStart(source, piece) {
-  if (!currentGameId || gameOverHandled || finishTransitionPending) return false;
+  if (!currentGameId) return false;
   if (myColor === "white" && game.turn() !== "w") return false;
   if (myColor === "black" && game.turn() !== "b") return false;
 
@@ -823,125 +261,49 @@ function onDrop(source, target) {
   board.position(game.fen(), false);
   playSound(soundForMove(move, game));
 
-  const nextActive = game.turn() === "w" ? "white" : "black";
-  advanceLocalClock(nextActive);
+  activeTimer = game.turn() === "w" ? "white" : "black";
+  renderTimers();
 
-  pushMove().catch(() => {
-    if (latestGameData) {
-      reconcileGameMoves(latestGameData, false);
-      syncClockSnapshot(latestGameData);
-    }
-    setQueueStatus("Move could not be confirmed. Reconnecting...");
-  });
+  pushMove();
 }
 
 // =======================
 // PUSH MOVE TO FIREBASE
 // =======================
-async function runGameTransition(command) {
-  const gameId = normalizeFirebaseKey(currentGameId);
-  if (!gameId || !window.firebaseDb) {
-    return { committed: false, snapshot: null };
-  }
-
-  const { ref, runTransaction } =
-    await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  return runTransaction(ref(window.firebaseDb, `games/${gameId}`), current => {
-    const next = transitionGameState(current, command, Date.now());
-    return next ?? undefined;
-  }, { applyLocally: false });
-}
-
 async function pushMove() {
-  if (!currentGameId) return false;
+  if (!currentGameId || !currentWhiteData?.uid || !currentBlackData?.uid) return;
 
-  const moves = game.history();
-  const transaction = await runGameTransition({
-    type: "move",
-    previousMoves: moves.slice(0, -1),
-    moves,
-    fen: game.fen(),
-  });
-  const data = transaction.snapshot?.val?.();
+  const history = game.history();
+  const oldPly = history.length - 1;
+  const san = history[oldPly];
+  const nextUid = game.turn() === "w"
+    ? currentWhiteData.uid
+    : currentBlackData.uid;
 
-  if (data?.status === "finished") {
-    reconcileGameMoves(data, false);
-    handleFinishedGame(data);
-  } else if (!transaction.committed && data) {
-    reconcileGameMoves(data, false);
-    syncClockSnapshot(data);
-  }
+  if (oldPly < 0 || !san || !nextUid) return;
 
-  return transaction.committed;
-}
+  const { ref, update, get } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const gameRef = ref(window.firebaseDb, `games/${currentGameId}`);
 
-async function requestGameFinish(reason, winner = null) {
-  if (gameOverHandled || finishTransitionPending || !currentGameId) return false;
-
-  finishTransitionPending = true;
   try {
-    const transaction = await runGameTransition({
-      type: "finish",
-      reason,
-      winner,
-      actorColor: myColor,
+    await update(gameRef, {
+      [`moves/${oldPly}`]: san,
+      position: {
+        ply: oldPly + 1,
+        turnUid: nextUid,
+        fen: game.fen(),
+        lastMove: san,
+      },
     });
-    const data = transaction.snapshot?.val?.();
-
-    if (data?.status === "finished") {
-      handleFinishedGame(data);
-    } else if (data) {
-      syncClockSnapshot(data);
+  } catch (error) {
+    console.warn("Move update rejected; restoring server position:", error);
+    try {
+      const snap = await get(gameRef);
+      if (snap.exists()) syncBoardFromData(snap.val(), true);
+    } catch (reloadError) {
+      console.error("Could not restore the server position:", reloadError);
     }
-    return transaction.committed;
-  } finally {
-    finishTransitionPending = false;
   }
-}
-
-function resultForFinishedGame(data) {
-  return resultForColor(data, myColor) || "draw";
-}
-
-function handleFinishedGame(data) {
-  if (gameOverHandled) return;
-  gameOverHandled = true;
-  finishTransitionPending = false;
-  clearInterval(timerInterval);
-
-  syncClockSnapshot(data);
-
-  const reason = FINISH_REASONS.has(data.finishReason)
-    ? data.finishReason
-    : data.resigned
-      ? "resign"
-      : data.drawAccepted
-        ? "draw"
-        : "drawRule";
-  const result = resultForFinishedGame(data);
-  showGameOver(result, reason);
-  saveGameResult(data, result).catch(() => {
-    const msg = document.getElementById("drawOfferMsg");
-    if (msg) msg.textContent = "Game finished, but profile updates are pending.";
-  });
-}
-
-function reconcileGameMoves(data, animate = true) {
-  const remoteMoves = normalizeMoves(data.moves);
-  const localMoves = game.history();
-  if (sameMoves(remoteMoves, localMoves)) return true;
-
-  game.reset();
-  for (const san of remoteMoves) {
-    if (!game.move(san)) return false;
-  }
-  board.position(game.fen(), animate);
-
-  if (remoteMoves.length > localMoves.length) {
-    const lastMove = game.history({ verbose: true }).at(-1);
-    playSound(soundForMove({ captured: lastMove?.captured }, game));
-  }
-  return true;
 }
 
 // =======================
@@ -949,82 +311,320 @@ function reconcileGameMoves(data, animate = true) {
 // =======================
 let currentWhiteData = null;
 let currentBlackData = null;
-let latestGameData = null;
 let timersStarted = false;
 
-function syncClockFromGameSnapshot(gameData) {
-  const normalizedData = withResolvedGameTimeControl(gameData);
-  if (!normalizedData) return false;
+function orderedMoves(rawMoves) {
+  if (!rawMoves || typeof rawMoves !== "object") return [];
+  return Object.entries(rawMoves)
+    .sort(([a], [b]) => {
+      const aNumber = Number(a);
+      const bNumber = Number(b);
+      if (Number.isInteger(aNumber) && Number.isInteger(bNumber)) return aNumber - bNumber;
+      return a.localeCompare(b);
+    })
+    .map(([, move]) => move)
+    .filter(move => typeof move === "string");
+}
 
-  if (!timersStarted) {
-    if (!startTimers(normalizedData)) return false;
-    timersStarted = true;
-  } else {
-    if (!syncClockSnapshot(normalizedData)) return false;
+function buildLegacyMigration(data, whiteUsername, blackUsername) {
+  if (
+    !data
+    || data.schemaVersion !== undefined
+    || data.kind !== undefined
+    || data.createdBy !== undefined
+    || data.position !== undefined
+    || data.clocks !== undefined
+    || data.status !== "playing"
+    || !data.white?.uid
+    || !data.black?.uid
+    || data.white.uid === data.black.uid
+    || !Number.isFinite(data.createdAt)
+  ) {
+    throw new Error("This game is not eligible for the legacy migration.");
   }
-  return true;
+
+  const rawMoves = data.moves ?? {};
+  if (
+    !rawMoves
+    || typeof rawMoves !== "object"
+    || Array.isArray(rawMoves) && rawMoves.some(move => move == null)
+  ) {
+    throw new Error("The legacy move history is malformed.");
+  }
+
+  const entries = Object.entries(rawMoves)
+    .sort(([left], [right]) => Number(left) - Number(right));
+  if (
+    entries.length > 600
+    || entries.some(([key, san], index) =>
+      key !== String(index)
+      || typeof san !== "string"
+      || san.length < 1
+      || san.length > 32)
+  ) {
+    throw new Error("The legacy move history is not contiguous.");
+  }
+
+  const replay = new Chess();
+  for (const [, san] of entries) {
+    let move = null;
+    try {
+      move = replay.move(san);
+    } catch {
+      move = null;
+    }
+    if (!move) throw new Error("The legacy move history contains an illegal move.");
+  }
+
+  const ply = entries.length;
+  const replayedFen = replay.fen();
+  if (
+    (ply === 0 && data.fen !== undefined && data.fen !== START_FEN)
+    || (ply > 0 && data.fen !== replayedFen)
+  ) {
+    throw new Error("The legacy position does not match its move history.");
+  }
+
+  const hasLegacyTimeControl = Object.prototype.hasOwnProperty.call(data, "timeControl");
+  const timeControl = hasLegacyTimeControl ? data.timeControl : "rapid";
+  if (!TIME_CONTROLS[timeControl] || (!hasLegacyTimeControl && data.tournamentId)) {
+    throw new Error("The legacy time control is invalid.");
+  }
+  let hasCanonicalChallengeMarker = false;
+  if (data.challenge !== undefined) {
+    const challengeKeys = data.challenge && typeof data.challenge === "object"
+      ? Object.keys(data.challenge).sort()
+      : [];
+    if (
+      challengeKeys.join(",") !== "fromUid,toUid"
+      || data.challenge.fromUid !== data.white.uid
+      || data.challenge.toUid !== data.black.uid
+      || data.tournamentId !== undefined
+      || timeControl !== "rapid"
+    ) {
+      throw new Error("The legacy challenge marker is invalid.");
+    }
+    hasCanonicalChallengeMarker = true;
+  }
+
+  const kind = data.tournamentId
+    ? "tournament"
+    : hasCanonicalChallengeMarker || !hasLegacyTimeControl
+      ? "challenge"
+      : "queue";
+  const seconds = TIME_CONTROLS[timeControl].seconds;
+  const hasWhiteClock = Object.prototype.hasOwnProperty.call(data, "whiteTime");
+  const hasBlackClock = Object.prototype.hasOwnProperty.call(data, "blackTime");
+  if (hasWhiteClock !== hasBlackClock) {
+    throw new Error("Both legacy clocks are required when either clock exists.");
+  }
+  const legacyClock = color => {
+    const key = `${color}Time`;
+    if (!Object.prototype.hasOwnProperty.call(data, key)) {
+      if (kind === "challenge" && ply === 0) return seconds;
+      throw new Error(`The legacy ${color} clock is missing.`);
+    }
+    const value = data[key];
+    if (!Number.isInteger(value) || value < 0 || value > seconds) {
+      throw new Error(`The legacy ${color} clock is invalid.`);
+    }
+    return value;
+  };
+  const migratedWhiteClock = legacyClock("white");
+  const migratedBlackClock = legacyClock("black");
+  const millisecondClockKeys = ["whiteTimeMs", "blackTimeMs", "activeColor", "clockUpdatedAt"];
+  const millisecondClockCount = millisecondClockKeys
+    .filter(key => Object.prototype.hasOwnProperty.call(data, key))
+    .length;
+  if (millisecondClockCount !== 0 && millisecondClockCount !== millisecondClockKeys.length) {
+    throw new Error("The legacy millisecond clock metadata is partial.");
+  }
+  if (
+    millisecondClockCount === millisecondClockKeys.length
+    && (
+      !Number.isInteger(data.whiteTimeMs)
+      || data.whiteTimeMs < 0
+      || data.whiteTimeMs > seconds * 1000
+      || !Number.isInteger(data.blackTimeMs)
+      || data.blackTimeMs < 0
+      || data.blackTimeMs > seconds * 1000
+      || Math.ceil(data.whiteTimeMs / 1000) !== migratedWhiteClock
+      || Math.ceil(data.blackTimeMs / 1000) !== migratedBlackClock
+      || data.activeColor !== (replay.turn() === "w" ? "white" : "black")
+      || !Number.isFinite(data.clockUpdatedAt)
+      || data.clockUpdatedAt < data.createdAt
+    )
+  ) {
+    throw new Error("The legacy millisecond clock metadata is inconsistent.");
+  }
+  const position = {
+    ply,
+    turnUid: replay.turn() === "w" ? data.white.uid : data.black.uid,
+    fen: ply === 0 ? START_FEN : replayedFen,
+  };
+  if (ply > 0) position.lastMove = entries[ply - 1][1];
+
+  const updates = {
+    schemaVersion: 2,
+    kind,
+    createdBy: kind === "challenge" ? data.black.uid : data.white.uid,
+    position,
+    clocks: {
+      white: migratedWhiteClock,
+      black: migratedBlackClock,
+    },
+  };
+  if (!hasLegacyTimeControl) updates.timeControl = timeControl;
+  if (data.white.username !== whiteUsername) updates["white/username"] = whiteUsername;
+  if (data.black.username !== blackUsername) updates["black/username"] = blackUsername;
+  return updates;
+}
+
+async function ensureGameSchema(gameId) {
+  const { ref, get, update } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const db = window.firebaseDb;
+  const gameRef = ref(db, `games/${gameId}`);
+  let gameSnap = await get(gameRef);
+  let data = gameSnap.val();
+  if (!data || data.schemaVersion === 2) return data;
+
+  const whiteUid = data.white?.uid;
+  const blackUid = data.black?.uid;
+  const myUid = window.myUid;
+  if (!myUid || (myUid !== whiteUid && myUid !== blackUid)) {
+    throw new Error("Only a player in this game can migrate it.");
+  }
+
+  const [whiteNameSnap, blackNameSnap, myGameSnap] = await Promise.all([
+    get(ref(db, `users/${whiteUid}/username`)),
+    get(ref(db, `users/${blackUid}/username`)),
+    get(ref(db, `users/${myUid}/currentGame`)),
+  ]);
+  const whiteUsername = whiteNameSnap.val();
+  const blackUsername = blackNameSnap.val();
+  if (
+    typeof whiteUsername !== "string"
+    || typeof blackUsername !== "string"
+    || myGameSnap.val() !== gameId
+  ) {
+    throw new Error("The legacy game assignments could not be verified.");
+  }
+
+  const migration = buildLegacyMigration(data, whiteUsername, blackUsername);
+  try {
+    await update(gameRef, migration);
+  } catch (error) {
+    gameSnap = await get(gameRef);
+    data = gameSnap.val();
+    if (data?.schemaVersion === 2) return data;
+    throw error;
+  }
+
+  gameSnap = await get(gameRef);
+  data = gameSnap.val();
+  if (data?.schemaVersion !== 2) {
+    throw new Error("The legacy game migration did not complete.");
+  }
+  return data;
+}
+
+function syncBoardFromData(data, force = false) {
+  currentWhiteData = data.white || null;
+  currentBlackData = data.black || null;
+  if (TIME_CONTROLS[data.timeControl]) currentTimeControl = data.timeControl;
+
+  const remoteMoves = orderedMoves(data.moves);
+  const localMoves = game.history();
+  const movesDiffer = remoteMoves.length !== localMoves.length
+    || remoteMoves.some((move, index) => move !== localMoves[index]);
+
+  if (force || movesDiffer) {
+    const priorMoveCount = localMoves.length;
+    game.reset();
+    let replayedAll = true;
+
+    for (const san of remoteMoves) {
+      try {
+        if (!game.move(san)) {
+          replayedAll = false;
+          break;
+        }
+      } catch {
+        replayedAll = false;
+        break;
+      }
+    }
+
+    if (!replayedAll) {
+      game.reset();
+      const fallbackFen = data.position?.fen || data.fen;
+      if (typeof fallbackFen === "string") {
+        try {
+          game.load(fallbackFen);
+        } catch {
+          game.reset();
+        }
+      }
+    }
+
+    board.position(game.fen(), true);
+
+    if (remoteMoves.length > priorMoveCount) {
+      playSound(soundForMove(
+        { captured: game.history({ verbose: true }).at(-1)?.captured },
+        game,
+      ));
+    }
+  }
+
+  if (data.position?.turnUid === data.white?.uid) activeTimer = "white";
+  else if (data.position?.turnUid === data.black?.uid) activeTimer = "black";
+  else activeTimer = game.turn() === "w" ? "white" : "black";
+
+  const defaultTime = TIME_CONTROLS[data.timeControl]?.seconds ?? 600;
+  const whiteFallback = timersStarted ? whiteTime : defaultTime;
+  const blackFallback = timersStarted ? blackTime : defaultTime;
+  whiteTime = readClock(data, "white", whiteFallback);
+  blackTime = readClock(data, "black", blackFallback);
+  renderTimers();
+
+  return remoteMoves;
 }
 
 function listenToGame(gameId) {
-  const safeGameId = normalizeFirebaseKey(gameId);
-  const safeUid = normalizeFirebaseKey(window.myUid);
-  if (!safeGameId || !safeUid) {
-    setQueueStatus("Game data could not be validated.");
-    return;
-  }
-
   import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
     .then(({ ref, onValue }) => {
       const db = window.firebaseDb;
 
-      onValue(ref(db, `games/${safeGameId}`), (snap) => {
-        const storedData = snap.val();
-        if (!storedData) return;
-        const data = withResolvedGameTimeControl(storedData);
-        if (!data) {
-          setQueueStatus("Game time control could not be validated.");
-          return;
+      onValue(ref(db, `games/${gameId}`), (snap) => {
+        const data = snap.val();
+        if (!data) return;
+
+        syncBoardFromData(data);
+
+        if (!timersStarted && data.timeControl) {
+          timersStarted = true;
+          startTimers(data);
         }
-        if (!["playing", "finished"].includes(data.status) ||
-            colorForUser(data, safeUid) !== myColor) {
-          setQueueStatus("Game access could not be validated.");
+
+        updatePlayerBars(data);
+
+        // Detect resign
+        if (data.resigned && !gameOverHandled) {
+          gameOverHandled = true;
+          clearInterval(timerInterval);
+          const result = data.resigned === myColor ? "loss" : "win";
+          showGameOver(result, "resign");
+          saveGameResult(data, result);
           return;
         }
 
-        latestGameData = data;
-        currentWhiteData = data.white;
-        currentBlackData = data.black;
-        if (!reconcileGameMoves(data)) {
-          setQueueStatus("Game data could not be synchronized.");
-          return;
-        }
-        updatePlayerBars(data).catch(() => {
-          const message = document.getElementById("drawOfferMsg");
-          if (message && !message.textContent) {
-            message.textContent = "Player details could not be loaded.";
-            message.style.color = "var(--muted)";
-          }
-        });
-
-        if (data.status === "finished") {
-          handleFinishedGame(data);
-          return;
-        }
-
-        if (!syncClockFromGameSnapshot(data)) {
-          setQueueStatus("Game clock could not be validated.");
-          return;
-        }
-
-        // Upgrade legacy terminal flags through the guarded state transition.
-        if ((data.resigned === "white" || data.resigned === "black") &&
-            !gameOverHandled) {
-          requestGameFinish("resign", oppositeColor(data.resigned));
-          return;
-        }
-
+        // Detect draw accepted
         if (data.drawAccepted && !gameOverHandled) {
-          requestGameFinish("draw");
+          gameOverHandled = true;
+          clearInterval(timerInterval);
+          showGameOver("draw", "draw");
+          saveGameResult(data, "draw");
           return;
         }
 
@@ -1046,11 +646,17 @@ function listenToGame(gameId) {
         }
 
         if (game.game_over() && !gameOverHandled) {
-          const reason = getGameOverReason(game);
-          const winner = reason === "checkmate"
-            ? oppositeColor(game.turn() === "w" ? "white" : "black")
-            : null;
-          requestGameFinish(reason, winner);
+          gameOverHandled = true;
+          clearInterval(timerInterval);
+          let result;
+          if (game.in_checkmate()) {
+            const loserColor = game.turn() === "w" ? "white" : "black";
+            result = myColor === loserColor ? "loss" : "win";
+          } else {
+            result = "draw";
+          }
+          showGameOver(result, game.in_checkmate() ? "checkmate" : "draw");
+          saveGameResult(data, result);
         }
       });
     });
@@ -1059,26 +665,37 @@ function listenToGame(gameId) {
 // =======================
 // START GAME
 // =======================
-function startGame(gameId, color, tc) {
-  const safeGameId = normalizeFirebaseKey(gameId);
-  const safeTimeControl = normalizeTimeControl(tc);
-  if (!safeGameId ||
-      !safeTimeControl ||
-      (color !== "white" && color !== "black")) {
-    setQueueStatus("Game access could not be validated.");
-    return false;
+async function startGame(gameId, color, tc) {
+  try {
+    const data = await ensureGameSchema(gameId);
+    if (!data || data.status !== "playing") {
+      throw new Error("This game is no longer active.");
+    }
+    const verifiedColor = data.white?.uid === window.myUid
+      ? "white"
+      : data.black?.uid === window.myUid
+        ? "black"
+        : null;
+    if (!verifiedColor) throw new Error("This account is not a player in the game.");
+    beginGame(gameId, verifiedColor, data.timeControl || tc);
+  } catch (error) {
+    console.error("Could not prepare the game:", error);
+    setQueueStatus("This older game could not be resumed safely.");
   }
+}
 
-  currentGameId = safeGameId;
+function beginGame(gameId, color, tc) {
+  if (currentGameUnsub) {
+    currentGameUnsub();
+    currentGameUnsub = null;
+  }
+  currentGameId = gameId;
   myColor = color;
+  if (TIME_CONTROLS[tc]) currentTimeControl = tc;
   gameOverHandled = false;
-  finishTransitionPending = false;
   timersStarted = false;
   isQueuing = false;
-  latestGameData = null;
-  clockSnapshot = null;
-  activeTimer = null;
-  clearInterval(timerInterval);
+  clockWriteInFlight = false;
   game.reset();
 
   document.querySelectorAll(".tc-btn").forEach(b => {
@@ -1101,19 +718,20 @@ function startGame(gameId, color, tc) {
     moveSpeed: 200,
     snapSpeed: 150,
     snapbackSpeed: 200,
-    pieceTheme,
+    pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
     onDrop,
     onDragStart,
     onSnapbackEnd: () => clearLegalDots(),
   });
 
-  const secs = TIME_CONTROLS[safeTimeControl].seconds;
-  whiteTime = secs;
-  blackTime = secs;
-  renderTimers();
+  if (tc) {
+    const secs = TIME_CONTROLS[tc]?.seconds ?? 600;
+    whiteTime = secs;
+    blackTime = secs;
+    renderTimers();
+  }
 
-  listenToGame(safeGameId);
-  return true;
+  listenToGame(gameId);
 }
 
 // =======================
@@ -1130,9 +748,6 @@ function showGameOver(result, reason) {
     checkmate: "by checkmate",
     timeout: "on time",
     stalemate: "by stalemate",
-    repetition: "by threefold repetition",
-    insufficient: "by insufficient material",
-    drawRule: "by draw rule",
     draw: "by agreement",
     resign: "by resignation",
   };
@@ -1165,18 +780,12 @@ document.getElementById("goPlayAgain").onclick = () => {
   document.getElementById("gameoverOverlay").classList.add("hidden");
   document.getElementById("gameActions").style.display = "none";
   currentGameId = null;
-  currentTournamentId = null;
   gameOverHandled = false;
-  finishTransitionPending = false;
   timersStarted = false;
   myColor = null;
   clearInterval(timerInterval);
-  clockSnapshot = null;
-  activeTimer = null;
   whiteTime = 0;
   blackTime = 0;
-  document.getElementById("goArena").classList.add("hidden");
-  document.getElementById("goPlayAgain").classList.remove("hidden");
   document.getElementById("whiteTimer").textContent = "—:——";
   document.getElementById("blackTimer").textContent = "—:——";
   game.reset();
@@ -1184,7 +793,7 @@ document.getElementById("goPlayAgain").onclick = () => {
   board = Chessboard("board", {
     draggable: false,
     position: "start",
-    pieceTheme,
+    pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
   });
   setQueueStatus("Select a time control to play");
 };
@@ -1211,13 +820,12 @@ const TITLE_LABELS = {
 };
 
 async function fetchUserData(uid) {
-  const safeUid = normalizeFirebaseKey(uid);
-  if (!safeUid) return { title: null, rating: null, avatar: null };
+  if (!uid) return { title: null, rating: null, avatar: null };
   const { ref, get } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
   const [titleSnap, ratingSnap, avatarSnap] = await Promise.all([
-    get(ref(window.firebaseDb, `users/${safeUid}/title`)),
-    get(ref(window.firebaseDb, `users/${safeUid}/rating`)),
-    get(ref(window.firebaseDb, `users/${safeUid}/avatarUrl`)),
+    get(ref(window.firebaseDb, `users/${uid}/title`)),
+    get(ref(window.firebaseDb, `users/${uid}/rating`)),
+    get(ref(window.firebaseDb, `users/${uid}/avatarUrl`)),
   ]);
   return {
     title: titleSnap.val() || null,
@@ -1229,9 +837,25 @@ async function fetchUserData(uid) {
 function setAvatar(elId, url, letter) {
   const el = document.getElementById(elId);
   if (!el) return;
-  const avatarUrl = safeAvatarUrl(url);
-  if (avatarUrl) {
-    el.style.backgroundImage = `url(${JSON.stringify(avatarUrl)})`;
+
+  let safeUrl = null;
+  if (typeof url === "string") {
+    try {
+      const parsed = new URL(url);
+      if (
+        parsed.protocol === "https:"
+        && parsed.hostname === "res.cloudinary.com"
+        && parsed.pathname.startsWith("/dszgbkb1f/image/upload/")
+      ) {
+        safeUrl = parsed.href;
+      }
+    } catch {
+      safeUrl = null;
+    }
+  }
+
+  if (safeUrl) {
+    el.style.backgroundImage = `url("${safeUrl}")`;
     el.style.backgroundSize = "cover";
     el.style.backgroundPosition = "center";
     el.style.fontSize = "0";
@@ -1239,37 +863,35 @@ function setAvatar(elId, url, letter) {
   } else {
     el.style.backgroundImage = "";
     el.style.fontSize = "";
-    el.textContent = normalizeDisplayName(letter, "?").slice(0, 1).toUpperCase();
+    el.textContent = letter;
   }
 }
 
-function renderPlayerName(el, username, titleKey, isYou = false) {
+function renderPlayerName(el, titleKey, username, showYou = false) {
   if (!el) return;
+  el.replaceChildren();
+
   const title = titleKey && TITLE_LABELS[titleKey];
-  const displayName = normalizeDisplayName(username, "Player");
-
-  el.textContent = "";
   if (title) {
-    const titleEl = document.createElement("span");
-    titleEl.className = "bar-title";
-    titleEl.style.color = title.color;
-    titleEl.textContent = title.label;
-    el.appendChild(titleEl);
-    el.appendChild(document.createTextNode(" "));
+    const badge = document.createElement("span");
+    badge.className = "bar-title";
+    badge.style.color = title.color;
+    badge.textContent = title.label;
+    el.append(badge, document.createTextNode(" "));
   }
-  el.appendChild(document.createTextNode(displayName));
 
-  if (isYou) {
-    const youEl = document.createElement("span");
-    youEl.className = "bar-you";
-    youEl.textContent = "";
-    el.appendChild(youEl);
+  el.append(document.createTextNode(String(username || "Unknown")));
+
+  if (showYou) {
+    const you = document.createElement("span");
+    you.className = "bar-you";
+    el.append(document.createTextNode(" "), you);
   }
 }
 
 async function updatePlayerBars(data) {
-  const whiteUsername = normalizeDisplayName(data.white?.username, "White");
-  const blackUsername = normalizeDisplayName(data.black?.username, "Black");
+  const whiteUsername = data.white?.username || "White";
+  const blackUsername = data.black?.username || "Black";
   const whiteUid = data.white?.uid;
   const blackUid = data.black?.uid;
 
@@ -1283,6 +905,8 @@ async function updatePlayerBars(data) {
   const oppData = myColor === "white" ? bData : wData;
   const myUsername = myColor === "white" ? whiteUsername : blackUsername;
   const oppUsername = myColor === "white" ? blackUsername : whiteUsername;
+  const myAvatarId = myColor === "white" ? "whiteAvatar" : "blackAvatar";
+  const oppAvatarId = myColor === "white" ? "blackAvatar" : "whiteAvatar";
 
   // Bottom bar = you, top bar = opponent
   const bottomName = document.getElementById("whiteName");
@@ -1290,387 +914,438 @@ async function updatePlayerBars(data) {
   const topName = document.getElementById("blackName");
   const topRating = document.getElementById("blackRating");
 
-  setAvatar("whiteAvatar", myData.avatar, myUsername[0].toUpperCase());
-  setAvatar("blackAvatar", oppData.avatar, oppUsername[0].toUpperCase());
+  setAvatar("whiteAvatar", myData.avatar, String(myUsername || "?")[0].toUpperCase());
+  setAvatar("blackAvatar", oppData.avatar, String(oppUsername || "?")[0].toUpperCase());
 
-  renderPlayerName(bottomName, myUsername, myData.title, true);
+  renderPlayerName(bottomName, myData.title, myUsername, true);
   if (bottomRating) bottomRating.textContent = myData.rating ? `(${myData.rating})` : "";
-  renderPlayerName(topName, oppUsername, oppData.title);
+  renderPlayerName(topName, oppData.title, oppUsername);
   if (topRating) topRating.textContent = oppData.rating ? `(${oppData.rating})` : "";
 }
 
 // =======================
 // SAVE GAME RESULT
 // =======================
-async function saveGameResult(data, result, options = {}) {
-  const firebaseApi = options.firebaseApi ||
-    await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  const { ref, runTransaction } = firebaseApi;
-  const db = options.db || window.firebaseDb;
-  const safeUid = normalizeFirebaseKey(options.uid ?? window.myUid);
-  const finishedGameId = normalizeFirebaseKey(options.gameId ?? currentGameId);
-  const finishedColor = options.color ?? myColor;
-  const canonicalResult = resultForColor(data, finishedColor);
-  const participantColor = colorForUser(data, safeUid);
+async function saveGameResult(data, result) {
+  const { ref, get, update } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const db = window.firebaseDb;
+  const myUid = window.myUid;
+  if (!myUid || !currentGameId) return;
 
-  if (!db ||
-      !safeUid ||
-      !finishedGameId ||
-      participantColor !== finishedColor ||
-      canonicalResult !== result) {
-    throw new Error("Finished game result could not be validated.");
-  }
+  const opponentData = myColor === "white" ? data.black : data.white;
+  const opponentUsername = opponentData?.username || "Unknown";
+  const statsField = result === "win" ? "wins" : result === "loss" ? "losses" : "draws";
 
-  const opponentData = finishedColor === "white" ? data.black : data.white;
-  const opponentUid = normalizeFirebaseKey(opponentData?.uid);
-  if (!opponentUid || opponentUid === safeUid) {
-    throw new Error("Finished game participants could not be validated.");
-  }
+  const [statSnap, ratingSnap] = await Promise.all([
+    get(ref(db, `users/${myUid}/${statsField}`)),
+    get(ref(db, `users/${myUid}/rating`)),
+  ]);
 
-  const finishedTournamentId = resolveTournamentContext(
-    options.tournamentId ?? currentTournamentId,
-    data
-  );
-  const now = options.now || Date.now;
-  const claim = {
-    gameId: finishedGameId,
-    result,
-    myColor: finishedColor,
-    opponentUid,
-    opponentUsername: normalizeDisplayName(opponentData?.username, "Unknown"),
-    moveCount: normalizeMoves(data.moves).length,
-    playedAt: Number.isFinite(data.finishedAt) ? data.finishedAt : now(),
-    timeControl: normalizeTimeControl(data.timeControl) ||
-      normalizeTimeControl(selectedTc) ||
-      "rapid",
-    tournamentId: finishedTournamentId,
-  };
+  const currentStat = Number.isInteger(statSnap.val()) ? statSnap.val() : 0;
+  const currentRating = Number.isFinite(ratingSnap.val()) ? ratingSnap.val() : 1200;
+  const newStat = currentStat + 1;
+  const requestedRatingChange = result === "win" ? 10 : result === "loss" ? -10 : 0;
+  const newRating = Math.min(4000, Math.max(100, currentRating + requestedRatingChange));
+  const ratingChange = newRating - currentRating;
 
-  const profileTransaction = await runTransaction(
-    ref(db, `users/${safeUid}`),
-    user => applyUserGameResult(user, claim),
-    { applyLocally: false }
-  );
-  const storedUser = profileTransaction.snapshot?.val?.();
-  const storedClaim = storedUser?.resultClaims?.[finishedGameId];
-  if (!resultClaimMatches(storedClaim, claim)) {
-    throw new Error("Game result claim conflicted with stored profile data.");
-  }
-
-  let tournamentCommitted = false;
-  if (finishedTournamentId && storedClaim.tournamentEligible === true) {
-    tournamentCommitted = await saveTournamentResult(
+  await update(ref(db), {
+    [`users/${myUid}/${statsField}`]: newStat,
+    [`users/${myUid}/rating`]: newRating,
+    [`users/${myUid}/currentGame`]: null,
+    [`games/${currentGameId}/status`]: "finished",
+    [`users/${myUid}/gameHistory/${currentGameId}`]: {
+      gameId: currentGameId,
       result,
-      finishedTournamentId,
-      finishedGameId,
-      {
-        firebaseApi,
-        db,
-        uid: safeUid,
-        appliedAt: storedClaim.appliedAt,
-      }
-    );
-  }
+      opponentUsername,
+      myColor,
+      moveCount: game.history().length,
+      playedAt: Date.now(),
+      ratingChange,
+      timeControl: data.timeControl || currentTimeControl || selectedTc || "rapid",
+    },
+  });
 
-  return {
-    profileCommitted: profileTransaction.committed,
-    tournamentCommitted,
-    legacyResult: storedClaim.legacyHistory === true,
-  };
+  if (currentTournamentId) await saveTournamentResult(result);
 }
 
 // =======================
 // SAVE TOURNAMENT RESULT
 // =======================
-async function saveTournamentResult(
-  result,
-  tournamentId,
-  gameId,
-  options = {}
-) {
-  const firebaseApi = options.firebaseApi ||
-    await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  const { ref, runTransaction } = firebaseApi;
-  const db = options.db || window.firebaseDb;
-  const safeUid = normalizeFirebaseKey(options.uid ?? window.myUid);
-  const safeTournamentId = normalizeFirebaseKey(tournamentId);
-  const safeGameId = normalizeFirebaseKey(gameId);
-  if (!db ||
-      !safeUid ||
-      !safeTournamentId ||
-      !safeGameId ||
-      !["win", "loss", "draw"].includes(result)) {
-    throw new Error("Tournament result could not be validated.");
-  }
+async function saveTournamentResult(result) {
+  const { ref, runTransaction } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const myUid = window.myUid;
+  if (!myUid || !currentTournamentId) return;
 
-  const claim = {
-    gameId: safeGameId,
-    result,
-    appliedAt: Number.isFinite(options.appliedAt)
-      ? options.appliedAt
-      : Date.now(),
-  };
-  const transaction = await runTransaction(
-    ref(db, `tournaments/${safeTournamentId}/players/${safeUid}`),
-    player => applyTournamentGameResult(player, claim),
-    { applyLocally: false }
-  );
-  const storedPlayer = transaction.snapshot?.val?.();
-  if (!tournamentResultClaimMatches(
-    storedPlayer?.resultClaims?.[safeGameId],
-    claim
-  )) {
-    throw new Error("Tournament result claim conflicted with stored score.");
-  }
-  return transaction.committed;
+  const scoreGain = result === "win" ? 2 : result === "draw" ? 1 : 0;
+
+  await runTransaction(ref(window.firebaseDb, `tournaments/${currentTournamentId}/players/${myUid}`), player => {
+    if (!player) return player;
+    return {
+      username:    player.username,
+      score:       (player.score       || 0) + scoreGain,
+      wins:        (player.wins        || 0) + (result === "win"  ? 1 : 0),
+      draws:       (player.draws       || 0) + (result === "draw" ? 1 : 0),
+      losses:      (player.losses      || 0) + (result === "loss" ? 1 : 0),
+      gamesPlayed: (player.gamesPlayed || 0) + 1,
+      joinedAt:    player.joinedAt,
+    };
+  });
 }
 
 // =======================
 // WAIT FOR FIREBASE
 // =======================
-function isFirebaseReady() {
-  return Boolean(
-    window.firebaseDb &&
-    window.firebaseAuth &&
-    typeof window.firebaseOnAuthChanged === "function"
-  );
-}
-
-function waitForFirebase(cb, options = {}) {
-  const timeoutMs = options.timeoutMs ?? FIREBASE_READY_TIMEOUT_MS;
-  const pollMs = options.pollMs ?? FIREBASE_POLL_INTERVAL_MS;
-  const now = options.now || Date.now;
-  const schedule = options.schedule || setTimeout;
-  const onTimeout = options.onTimeout || (() => {
-    handleFirebaseUnavailable(
-      "Online play is unavailable. Reload the page to try again."
-    );
-  });
-  const startedAt = now();
-  let settled = false;
-
-  const poll = () => {
-    if (settled) return;
-    if (isFirebaseReady()) {
-      settled = true;
-      cb();
-      return;
-    }
-    if (now() - startedAt >= timeoutMs) {
-      settled = true;
-      onTimeout();
-      return;
-    }
-    schedule(poll, pollMs);
-  };
-
-  poll();
-  return () => {
-    settled = true;
-  };
-}
-
-function handleFirebaseUnavailable(message) {
-  isQueuing = false;
-  document.querySelectorAll(".tc-btn").forEach(button => {
-    button.disabled = false;
-  });
-  document.getElementById("cancelBtn")?.classList.remove("visible");
-  if (selectedTc) document.getElementById("playBtn")?.classList.add("visible");
-  setQueueStatus(message);
+function waitForFirebase(cb) {
+  if (window.firebaseDb && window.firebaseAuth) return cb();
+  setTimeout(() => waitForFirebase(cb), 50);
 }
 
 // =======================
 // QUEUE
 // =======================
-function joinQueue(uid, username, tc) {
-  const safeUid = normalizeFirebaseKey(uid);
-  const safeTimeControl = normalizeTimeControl(tc);
-  if (!safeUid || !safeTimeControl) {
-    handleFirebaseUnavailable("Unable to join the queue with this account.");
-    return;
-  }
-
-  import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-    .then(async ({ ref, set, remove, onDisconnect }) => {
-      const db = window.firebaseDb;
-      myQueueRef = ref(db, `queue/${safeTimeControl}/${safeUid}`);
-      const queueRef = myQueueRef;
-      await set(queueRef, {
-        uid: safeUid,
-        username: normalizeDisplayName(username, "Player"),
-        joinedAt: Date.now(),
-        tc: safeTimeControl,
-      });
-      if (!isQueuing) {
-        await remove(queueRef);
-        if (myQueueRef === queueRef) myQueueRef = null;
-        return;
-      }
-      onDisconnect(myQueueRef).remove();
-      tryMatch(safeUid, username, safeTimeControl);
-    })
-    .catch(() => {
-      handleFirebaseUnavailable("Unable to join the queue. Try again.");
-    });
+function openQueueEntry(uid, username, joinedAt, tc) {
+  return { uid, username, joinedAt, tc, state: "open" };
 }
 
-function tryMatch(myUid, myUsername, tc) {
-  const safeUid = normalizeFirebaseKey(myUid);
-  const safeTimeControl = normalizeTimeControl(tc);
-  if (!safeUid || !safeTimeControl) {
-    handleFirebaseUnavailable("Unable to match this queue entry.");
-    return;
-  }
-
-  import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-    .then(({ ref, runTransaction }) => {
-      const db = window.firebaseDb;
-      const queueRef = ref(db, `queue/${safeTimeControl}`);
-      let matchedOpponent = null;
-
-      return runTransaction(queueRef, (queue) => {
-        const plan = planQueueMatch(queue, safeUid);
-        matchedOpponent = plan.opponent;
-        return plan.queue;
-      }).then(async (result) => {
-        if (!result.committed) return;
-        if (matchedOpponent) {
-          await createGame(
-            safeUid,
-            myUsername,
-            matchedOpponent.uid,
-            matchedOpponent.username,
-            safeTimeControl
-          );
-        } else {
-          await listenForGame(safeUid, safeTimeControl);
-        }
-      });
-    })
-    .catch(() => {
-      handleFirebaseUnavailable("Unable to create or join a game. Try again.");
-    });
+function isEarlierQueueEntry(candidate, mine) {
+  return candidate.joinedAt < mine.joinedAt
+    || (candidate.joinedAt === mine.joinedAt && candidate.uid < mine.uid);
 }
 
-async function createGame(
-  whiteUid,
-  whiteUsername,
-  blackUid,
-  blackUsername,
-  tc,
-  options = {}
-) {
-  const safeWhiteUid = normalizeFirebaseKey(whiteUid);
-  const safeBlackUid = normalizeFirebaseKey(blackUid);
-  const safeTimeControl = normalizeTimeControl(tc);
-  if (!safeWhiteUid ||
-      !safeBlackUid ||
-      safeWhiteUid === safeBlackUid ||
-      !safeTimeControl) {
-    throw new Error("Game participants or time control are invalid.");
-  }
-
-  const firebaseApi = options.firebaseApi ||
-    await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  const { ref, update, push } = firebaseApi;
-  const db = options.db || window.firebaseDb;
-  if (!db) throw new Error("Firebase is unavailable.");
-
-  const gameRef = push(ref(db, "games"));
-  const gameId = normalizeFirebaseKey(gameRef.key);
-  if (!gameId) throw new Error("Firebase returned an invalid game id.");
-
-  const secs = TIME_CONTROLS[safeTimeControl].seconds;
-  const createdAt = (options.now || Date.now)();
-  const gameData = {
-    white: {
-      uid: safeWhiteUid,
-      username: normalizeDisplayName(whiteUsername, "White"),
-    },
-    black: {
-      uid: safeBlackUid,
-      username: normalizeDisplayName(blackUsername, "Black"),
-    },
-    fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    moves: [],
-    status: "playing",
-    timeControl: safeTimeControl,
-    whiteTime: secs,
-    blackTime: secs,
-    whiteTimeMs: secs * 1000,
-    blackTimeMs: secs * 1000,
-    activeColor: "white",
-    clockUpdatedAt: createdAt,
-    createdAt,
-  };
-  const updates = {
-    [`games/${gameId}`]: gameData,
-    [`users/${safeWhiteUid}/currentGame`]: gameId,
-    [`users/${safeBlackUid}/currentGame`]: gameId,
-  };
-
-  await update(ref(db), updates);
-  const start = options.startGame || startGame;
-  start(gameId, "white", safeTimeControl);
-  return gameId;
+function isFreshQueueTimestamp(value, referenceTime = Date.now()) {
+  return Number.isFinite(value)
+    && value >= referenceTime - 300000
+    && value <= referenceTime + 300000;
 }
 
-async function listenForGame(uid, tc, options = {}) {
-  const safeUid = normalizeFirebaseKey(uid);
-  const queueTimeControl = normalizeTimeControl(tc);
-  if (!safeUid || !queueTimeControl) {
-    throw new Error("Queue user id or time control is invalid.");
-  }
-
-  const firebaseApi = options.firebaseApi ||
-    await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  const { ref, onValue, get } = firebaseApi;
-  const db = options.db || window.firebaseDb;
-  if (!db) throw new Error("Firebase is unavailable.");
-
-  let checkingGame = false;
-  let unsubscribe = () => {};
-  unsubscribe = onValue(
-    ref(db, `users/${safeUid}/currentGame`),
-    async snap => {
-      if (!snap.exists() || currentGameId || checkingGame) return;
-
-      const gameId = normalizeFirebaseKey(snap.val());
-      if (!gameId) {
-        setQueueStatus("Matched game id could not be validated.");
-        return;
-      }
-
-      checkingGame = true;
-      try {
-        const gameSnap = await get(ref(db, `games/${gameId}`));
-        const gameData = gameSnap.val();
-        const color = colorForUser(gameData, safeUid);
-        if (!gameData ||
-            !["playing", "finished"].includes(gameData.status) ||
-            !color) {
-          setQueueStatus("Matched game access could not be validated.");
-          return;
-        }
-
-        const gameTimeControl = resolveGameTimeControl(gameData);
-        if (!gameTimeControl) {
-          setQueueStatus("Matched game time control could not be validated.");
-          return;
-        }
-
-        unsubscribe();
-        const start = options.startGame || startGame;
-        start(gameId, color, gameTimeControl);
-      } catch {
-        setQueueStatus("Matched game could not be loaded. Reconnecting...");
-      } finally {
-        checkingGame = false;
-      }
+async function reopenClaim(entryRef, expectedState, peerUid, gameId, openEntry) {
+  const { runTransaction } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  await runTransaction(entryRef, current => {
+    if (
+      !current
+      || current.state !== expectedState
+      || current.peerUid !== peerUid
+      || current.gameId !== gameId
+    ) {
+      return;
     }
-  );
-  return unsubscribe;
+    return openEntry;
+  });
+}
+
+async function rollbackClaims(
+  ownRef,
+  candidateRef,
+  ownOpen,
+  candidateOpen,
+  candidateUid,
+  gameId,
+) {
+  // The peer lock is released first so a failed creator cannot strand it.
+  try {
+    await reopenClaim(candidateRef, "claimed", ownOpen.uid, gameId, candidateOpen);
+  } catch (error) {
+    console.warn("Could not release opponent queue claim:", error);
+  }
+
+  try {
+    await reopenClaim(ownRef, "claiming", candidateUid, gameId, ownOpen);
+  } catch (error) {
+    console.warn("Could not release own queue claim:", error);
+  }
+}
+
+async function joinQueue(uid, username, tc) {
+  const { ref, set, onDisconnect, runTransaction } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const db = window.firebaseDb;
+  const joinedAt = Date.now();
+  const entry = openQueueEntry(uid, username, joinedAt, tc);
+
+  myQueueRef = ref(db, `queue/${tc}/${uid}`);
+
+  try {
+    const cleanup = await runTransaction(myQueueRef, current => {
+      if (!current) return null;
+      if (
+        current.uid === uid
+        && (current.state === undefined || current.state === "open")
+      ) {
+        return null;
+      }
+      return;
+    }, { applyLocally: false });
+    if (!cleanup.committed) {
+      throw new Error("A previous matchmaking claim is still being resolved.");
+    }
+
+    const disconnect = onDisconnect(myQueueRef);
+    await disconnect.remove();
+    await set(myQueueRef, entry);
+    const attempt = tryMatch(uid, username, tc);
+    claimAttemptPromise = attempt;
+    let matched;
+    try {
+      matched = await attempt;
+    } finally {
+      if (claimAttemptPromise === attempt) claimAttemptPromise = null;
+    }
+    if (!matched && isQueuing) listenForGame(uid, tc);
+  } catch (error) {
+    console.error("Could not join the matchmaking queue:", error);
+    await cancelQueue();
+    setQueueStatus("Could not join the queue. Please try again.");
+  }
+}
+
+async function tryMatch(myUid, myUsername, tc) {
+  if (claimInFlight) return false;
+  claimInFlight = true;
+
+  const {
+    ref,
+    get,
+    push,
+    runTransaction,
+    remove,
+  } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const db = window.firebaseDb;
+  const ownRef = ref(db, `queue/${tc}/${myUid}`);
+  const queueRef = ref(db, `queue/${tc}`);
+
+  try {
+    for (let attempt = 0; attempt < 5 && isQueuing; attempt++) {
+      const [ownSnap, queueSnap] = await Promise.all([get(ownRef), get(queueRef)]);
+      const mine = ownSnap.val();
+      const queueWindowNow = Date.now();
+
+      if (
+        !mine
+        || mine.state !== "open"
+        || !isFreshQueueTimestamp(mine.joinedAt, queueWindowNow)
+      ) {
+        return false;
+      }
+
+      const candidates = [];
+      queueSnap.forEach(child => {
+        const candidate = child.val();
+        if (
+          candidate
+          && candidate.uid === child.key
+          && candidate.uid !== myUid
+          && candidate.tc === tc
+          && candidate.state === "open"
+          && typeof candidate.username === "string"
+          && isFreshQueueTimestamp(candidate.joinedAt, queueWindowNow)
+          && isEarlierQueueEntry(candidate, mine)
+        ) {
+          candidates.push(candidate);
+        }
+      });
+
+      candidates.sort((a, b) =>
+        a.joinedAt - b.joinedAt || a.uid.localeCompare(b.uid));
+      const candidate = candidates[0];
+      if (!candidate) return false;
+
+      const gameId = push(ref(db, "games")).key;
+      if (!gameId) throw new Error("Could not reserve a game ID.");
+
+      const stateAt = Date.now();
+      const ownOpen = openQueueEntry(myUid, myUsername, mine.joinedAt, tc);
+      const candidateOpen = openQueueEntry(
+        candidate.uid,
+        candidate.username,
+        candidate.joinedAt,
+        tc,
+      );
+      const candidateRef = ref(db, `queue/${tc}/${candidate.uid}`);
+
+      const ownLock = await runTransaction(ownRef, current => {
+        if (
+          !current
+          || current.state !== "open"
+          || current.uid !== myUid
+          || current.username !== myUsername
+          || current.joinedAt !== mine.joinedAt
+          || current.tc !== tc
+        ) {
+          return;
+        }
+        return {
+          ...ownOpen,
+          state: "claiming",
+          peerUid: candidate.uid,
+          gameId,
+          stateAt,
+        };
+      });
+
+      if (!ownLock.committed) return false;
+
+      let candidateLock;
+      try {
+        candidateLock = await runTransaction(candidateRef, current => {
+          if (
+            !current
+            || current.state !== "open"
+            || current.uid !== candidate.uid
+            || current.username !== candidate.username
+            || current.joinedAt !== candidate.joinedAt
+            || current.tc !== tc
+          ) {
+            return;
+          }
+          return {
+            ...candidateOpen,
+            state: "claimed",
+            peerUid: myUid,
+            gameId,
+            stateAt: Date.now(),
+          };
+        });
+      } catch (error) {
+        await reopenClaim(ownRef, "claiming", candidate.uid, gameId, ownOpen);
+        throw error;
+      }
+
+      if (!candidateLock.committed) {
+        await reopenClaim(ownRef, "claiming", candidate.uid, gameId, ownOpen);
+        continue;
+      }
+
+      if (!isQueuing) {
+        await rollbackClaims(
+          ownRef,
+          candidateRef,
+          ownOpen,
+          candidateOpen,
+          candidate.uid,
+          gameId,
+        );
+        return false;
+      }
+
+      try {
+        await createGame(
+          gameId,
+          myUid,
+          myUsername,
+          candidate.uid,
+          candidate.username,
+          tc,
+        );
+      } catch (error) {
+        try {
+          await remove(ref(db, `games/${gameId}`));
+        } catch (cleanupError) {
+          console.warn("Could not remove an unstarted game:", cleanupError);
+        }
+        await rollbackClaims(
+          ownRef,
+          candidateRef,
+          ownOpen,
+          candidateOpen,
+          candidate.uid,
+          gameId,
+        );
+        throw error;
+      }
+
+      isQueuing = false;
+      claimInFlight = false;
+
+      const cleanup = await Promise.allSettled([
+        remove(candidateRef),
+        remove(ownRef),
+      ]);
+      cleanup.forEach(result => {
+        if (result.status === "rejected") {
+          console.warn("Matched queue entry cleanup failed:", result.reason);
+        }
+      });
+      myQueueRef = null;
+      startGame(gameId, "white", tc);
+      return true;
+    }
+
+    return false;
+  } finally {
+    claimInFlight = false;
+  }
+}
+
+async function createGame(gameId, whiteUid, whiteUsername, blackUid, blackUsername, tc) {
+  const { ref, set, update } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const db = window.firebaseDb;
+  const secs = TIME_CONTROLS[tc]?.seconds ?? 600;
+
+  await set(ref(db, `games/${gameId}`), {
+    schemaVersion: 2,
+    kind: "queue",
+    createdBy: whiteUid,
+    white: { uid: whiteUid, username: whiteUsername },
+    black: { uid: blackUid, username: blackUsername },
+    status: "playing",
+    timeControl: tc,
+    createdAt: Date.now(),
+    position: {
+      ply: 0,
+      turnUid: whiteUid,
+      fen: START_FEN,
+    },
+    clocks: {
+      white: secs,
+      black: secs,
+    },
+  });
+
+  await update(ref(db), {
+    [`users/${whiteUid}/currentGame`]: gameId,
+    [`users/${blackUid}/currentGame`]: gameId,
+  });
+}
+
+async function listenForGame(uid, tc) {
+  const { ref, onValue, get, remove } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  const db = window.firebaseDb;
+
+  if (currentGameUnsub) currentGameUnsub();
+  currentGameUnsub = onValue(ref(db, `users/${uid}/currentGame`), async snap => {
+    if (!snap.exists() || currentGameId || claimInFlight) return;
+
+    const gameId = snap.val();
+    try {
+      const gameSnap = await get(ref(db, `games/${gameId}`));
+      const gameData = gameSnap.val();
+      if (
+        !gameData
+        || gameData.status !== "playing"
+        || (gameData.white?.uid !== uid && gameData.black?.uid !== uid)
+      ) {
+        return;
+      }
+
+      if (currentGameUnsub) {
+        currentGameUnsub();
+        currentGameUnsub = null;
+      }
+      if (myQueueRef) {
+        try {
+          await remove(myQueueRef);
+        } catch (error) {
+          console.warn("Could not clean up queue entry:", error);
+        }
+        myQueueRef = null;
+      }
+
+      isQueuing = false;
+      const color = gameData.white?.uid === uid ? "white" : "black";
+      startGame(gameId, color, gameData.timeControl || tc);
+    } catch (error) {
+      console.error("Could not open the matched game:", error);
+    }
+  });
 }
 
 // =======================
@@ -1679,22 +1354,25 @@ async function listenForGame(uid, tc, options = {}) {
 document.getElementById("resignBtn").onclick = () => {
   if (!currentGameId || gameOverHandled) return;
   if (!confirm("Are you sure you want to resign?")) return;
-  handleResign().catch(() => {
-    document.getElementById("drawOfferMsg").textContent =
-      "Unable to resign right now. Try again.";
-  });
+  handleResign();
 };
 
 async function handleResign() {
-  if (gameOverHandled || finishTransitionPending) return false;
-  return requestGameFinish("resign", oppositeColor(myColor));
+  if (gameOverHandled) return;
+  gameOverHandled = true;
+  clearInterval(timerInterval);
+
+  const { ref, set } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  await set(ref(window.firebaseDb, `games/${currentGameId}/resigned`), myColor);
+
+  showGameOver("loss", "resign");
+  saveGameResult({ white: currentWhiteData, black: currentBlackData }, "loss");
 }
 
 document.getElementById("drawOfferBtn").onclick = async () => {
-  const gameId = normalizeFirebaseKey(currentGameId);
-  if (!gameId || gameOverHandled) return;
+  if (!currentGameId || gameOverHandled) return;
   const { ref, set } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  await set(ref(window.firebaseDb, `games/${gameId}/drawOffer`), myColor);
+  await set(ref(window.firebaseDb, `games/${currentGameId}/drawOffer`), myColor);
   const msg = document.getElementById("drawOfferMsg");
   msg.textContent = "Draw offer sent...";
   msg.style.color = "var(--accent)";
@@ -1703,19 +1381,19 @@ document.getElementById("drawOfferBtn").onclick = async () => {
 
 document.getElementById("acceptDrawBtn").onclick = async () => {
   if (!currentGameId || gameOverHandled) return;
-  try {
-    await requestGameFinish("draw");
-  } catch {
-    document.getElementById("drawOfferMsg").textContent =
-      "Unable to accept the draw right now. Try again.";
-  }
+  gameOverHandled = true;
+  clearInterval(timerInterval);
+
+  const { ref, set } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+  await set(ref(window.firebaseDb, `games/${currentGameId}/drawAccepted`), true);
+
+  showGameOver("draw", "draw");
+  saveGameResult({ white: currentWhiteData, black: currentBlackData }, "draw");
 };
 
 document.getElementById("declineDrawBtn").onclick = async () => {
-  const gameId = normalizeFirebaseKey(currentGameId);
-  if (!gameId) return;
   const { ref, set } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
-  await set(ref(window.firebaseDb, `games/${gameId}/drawOffer`), null);
+  await set(ref(window.firebaseDb, `games/${currentGameId}/drawOffer`), null);
   document.getElementById("drawOfferIncoming").classList.add("hidden");
 };
 
@@ -1744,7 +1422,7 @@ function soundForMove(move, chessGame) {
 }
 
 async function loadMyAvatar() {
-  const uid = normalizeFirebaseKey(window.myUid);
+  const uid = window.myUid;
   if (!uid) return;
   const { ref, get } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
   const snap = await get(ref(window.firebaseDb, `users/${uid}/avatarUrl`));
@@ -1767,120 +1445,51 @@ async function loadMyAvatar() {
 // =======================
 // INIT
 // =======================
-let authListenerRegistered = false;
 
-function colorForUser(gameData, uid) {
-  const safeUid = normalizeFirebaseKey(uid);
-  const whiteUid = normalizeFirebaseKey(gameData?.white?.uid);
-  const blackUid = normalizeFirebaseKey(gameData?.black?.uid);
-  if (!safeUid || !whiteUid || !blackUid || whiteUid === blackUid) return null;
-  if (whiteUid === safeUid) return "white";
-  if (blackUid === safeUid) return "black";
-  return null;
-}
 
-function applyTournamentModeUi() {
-  if (!currentTournamentId) return;
-  window.history.replaceState({}, "", "play.html");
-  document.getElementById("goArena")?.classList.remove("hidden");
-  document.getElementById("goPlayAgain")?.classList.add("hidden");
-}
-
-function initializeFirebaseSession() {
-  if (authListenerRegistered || !isFirebaseReady()) return;
-  authListenerRegistered = true;
-
+waitForFirebase(() => {
   window.firebaseOnAuthChanged(window.firebaseAuth, user => {
     if (!user) { window.location.href = "login.html"; return; }
-    const safeUserUid = normalizeFirebaseKey(user.uid);
-    if (!safeUserUid) {
-      handleFirebaseUnavailable("This account id could not be validated.");
-      return;
-    }
 
     import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js")
-      .then(async ({ ref, get }) => {
-        try {
-          const usernameSnap = await get(
-            ref(window.firebaseDb, `users/${safeUserUid}/username`)
-          );
-          const username = normalizeDisplayName(usernameSnap.val() || user.email, "Player");
-          window.myUid = safeUserUid;
+      .then(({ ref, get }) => {
+        get(ref(window.firebaseDb, `users/${user.uid}/username`)).then(snap => {
+          const username = snap.val() || user.email;
+          window.myUid = user.uid;
           window.myUsername = username;
-          loadMyAvatar().catch(() => {});
+          loadMyAvatar();
 
-          const params = new URLSearchParams(window.location.search);
-          const challengeId = normalizeFirebaseKey(params.get("challenge"));
-          currentTournamentId = resolveTournamentContext(
-            params.get("tournament"),
-            null
-          );
+          const params        = new URLSearchParams(window.location.search);
+          const challengeId   = params.get("challenge");
+          const colorParam    = params.get("color");
+          currentTournamentId = params.get("tournament") || null;
 
-          if (challengeId) {
-            const challengeSnap = await get(ref(window.firebaseDb, `games/${challengeId}`));
-            const challengeGame = challengeSnap.val();
-            const challengeColor = colorForUser(challengeGame, safeUserUid);
-            const challengeTimeControl = resolveGameTimeControl(challengeGame);
-            if (!challengeGame ||
-                !["playing", "finished"].includes(challengeGame.status) ||
-                !challengeColor ||
-                !challengeTimeControl) {
-              handleFirebaseUnavailable("This challenge is unavailable.");
-              return;
-            }
-
-            currentTournamentId = resolveTournamentContext(
-              currentTournamentId,
-              challengeGame
-            );
-            if (currentTournamentId) applyTournamentModeUi();
+          if (currentTournamentId) {
             window.history.replaceState({}, "", "play.html");
-            startGame(challengeId, challengeColor, challengeTimeControl);
+            const goArenaBtn = document.getElementById("goArena");
+            const goAgainBtn = document.getElementById("goPlayAgain");
+            if (goArenaBtn) goArenaBtn.classList.remove("hidden");
+            if (goAgainBtn) goAgainBtn.classList.add("hidden");
+          }
+
+          if (challengeId && colorParam) {
+            window.history.replaceState({}, "", "play.html");
+            startGame(challengeId, colorParam, null);
             return;
           }
 
-          const gameSnap = await get(
-            ref(window.firebaseDb, `users/${safeUserUid}/currentGame`)
-          );
-          if (!gameSnap.exists()) return;
-
-          const gameId = normalizeFirebaseKey(gameSnap.val());
-          if (!gameId) return;
-          const gameDataSnap = await get(ref(window.firebaseDb, `games/${gameId}`));
-          const gameData = gameDataSnap.val();
-          const color = colorForUser(gameData, safeUserUid);
-          const gameTimeControl = resolveGameTimeControl(gameData);
-          if (!gameData ||
-              !["playing", "finished"].includes(gameData.status) ||
-              !color ||
-              !gameTimeControl) {
-            return;
-          }
-
-          currentTournamentId = resolveTournamentContext(
-            currentTournamentId,
-            gameData
-          );
-          if (currentTournamentId) applyTournamentModeUi();
-          startGame(gameId, color, gameTimeControl);
-        } catch {
-          authListenerRegistered = false;
-          handleFirebaseUnavailable(
-            "Online play could not load. Check your connection, then try again."
-          );
-        }
+          get(ref(window.firebaseDb, `users/${user.uid}/currentGame`)).then(gameSnap => {
+            if (gameSnap.exists()) {
+              const gameId = gameSnap.val();
+              get(ref(window.firebaseDb, `games/${gameId}`)).then(gSnap => {
+                const gameData = gSnap.val();
+                if (!gameData || gameData.status !== "playing") return;
+                const color = gameData.white?.uid === user.uid ? "white" : "black";
+                startGame(gameId, color, gameData.timeControl);
+              });
+            }
+          });
+        });
       });
   });
-}
-
-function initializePlayPage() {
-  waitForFirebase(initializeFirebaseSession, {
-    onTimeout: () => handleFirebaseUnavailable(
-      "Online play did not load. Check your connection, then reload the page."
-    ),
-  });
-}
-
-if (!window.__FAITHCHESS_TEST_MODE__) {
-  initializePlayPage();
-}
+});

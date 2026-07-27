@@ -1,0 +1,14 @@
+{
+  "name": "faithchess-site-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/firebase-legacy-migration-unit.mjs && node tests/firebase-rules-static.mjs && node tests/restored-site-static.mjs",
+    "firebase:migrate": "node scripts/firebase-legacy-migrate.mjs"
+  },
+  "devDependencies": {
+    "chess.js": "1.4.0",
+    "google-auth-library": "10.9.1"
+  }
+}

@@ -60,14 +60,10 @@
   }
 
   .t-card {
-    width: 100%;
     padding: 12px 14px;
     background: var(--bg4);
     border: 1px solid var(--border);
     border-radius: 10px;
-    color: inherit;
-    font-family: inherit;
-    text-align: left;
     cursor: pointer;
     transition: border-color .15s, background .15s;
   }
@@ -193,7 +189,6 @@
   }
 
   /* ── Leaderboard ── */
-  .leaderboard-scroll { max-width: 100%; overflow-x: auto; }
   .leaderboard { width: 100%; border-collapse: collapse; }
   .leaderboard th {
     text-align: left; font-size: 11px; font-weight: 700; color: var(--muted);
@@ -248,73 +243,9 @@
   .form-input:focus, .form-select:focus { border-color: var(--accent); }
   .form-select option { background: var(--bg3); }
 
-  .create-error { min-height: 17px; color: #e05c5c; font-size: 12px; }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
   .empty-list { text-align: center; color: var(--muted); font-size: 13px; padding: 32px 16px; }
-
-  .t-card:focus-visible,
-  .btn-create:focus-visible,
-  .btn-action:focus-visible,
-  .form-input:focus-visible,
-  .form-select:focus-visible {
-    outline: 3px solid var(--accent2);
-    outline-offset: 2px;
-  }
-
-  @media (max-width: 850px) {
-    .arena-wrap {
-      min-width: 0;
-      min-height: calc(100vh - 112px);
-      flex-direction: column;
-    }
-    .arena-list-panel {
-      width: 100%;
-      min-width: 0;
-      border-right: none;
-      border-bottom: 1px solid var(--border);
-      overflow: visible;
-    }
-    .arena-list-header { padding: 14px 16px 10px; }
-    .tournament-list {
-      max-width: 100%;
-      flex: none;
-      grid-auto-columns: minmax(230px, 80vw);
-      grid-auto-flow: column;
-      display: grid;
-      overflow-x: auto;
-      overflow-y: hidden;
-      scroll-snap-type: x proximity;
-    }
-    .t-card { min-width: 0; scroll-snap-align: start; }
-    .arena-detail-panel {
-      width: 100%;
-      min-width: 0;
-      padding: 24px 18px;
-      overflow: visible;
-    }
-    .detail-placeholder { min-height: 260px; }
-    .detail-header { flex-direction: column; }
-    .detail-actions { width: 100%; flex-wrap: wrap; }
-    .detail-actions .btn-action { flex: 1 1 150px; }
-  }
-
-  @media (max-width: 480px) {
-    .arena-list-header { padding-inline: 12px; }
-    .arena-detail-panel { padding: 20px 12px; }
-    .detail-title { font-size: 22px; overflow-wrap: anywhere; }
-    .countdown-bar { padding: 12px 14px; }
-    .modal-overlay { padding: 12px; }
-    .modal-box {
-      width: 100%;
-      min-width: 0;
-      max-height: calc(100vh - 24px);
-      padding: 22px 18px;
-      overflow-y: auto;
-    }
-    .modal-actions { flex-direction: column-reverse; }
-    .modal-actions .btn-action { width: 100%; }
-  }
 </style>
 </head>
 <body>
@@ -327,7 +258,7 @@
     <div class="arena-list-panel">
       <div class="arena-list-header">
         <span class="arena-list-title">♟ Arena</span>
-        <button class="btn-create" id="createBtn" type="button">+ Create</button>
+        <button class="btn-create" id="createBtn">+ Create</button>
       </div>
       <div class="tournament-list" id="tournamentList">
         <div class="empty-list">Loading...</div>
@@ -346,35 +277,34 @@
 </main>
 
 <!-- Create modal -->
-<div class="modal-overlay hidden" id="createModal" aria-hidden="true">
-  <form class="modal-box" id="createForm" role="dialog" aria-modal="true" aria-labelledby="createModalTitle">
-    <h2 class="modal-title" id="createModalTitle">Create Arena Tournament</h2>
+<div class="modal-overlay hidden" id="createModal">
+  <div class="modal-box">
+    <div class="modal-title">Create Arena Tournament</div>
     <div class="form-group">
-      <label class="form-label" for="tName">Name</label>
-      <input class="form-input" id="tName" name="tournamentName" placeholder="e.g. Sunday Blitz Arena" maxlength="40" autocomplete="off" required />
+      <label class="form-label">Name</label>
+      <input class="form-input" id="tName" placeholder="e.g. Sunday Blitz Arena" maxlength="40" />
     </div>
     <div class="form-group">
-      <label class="form-label" for="tTc">Time Control</label>
-      <select class="form-select" id="tTc" name="timeControl">
+      <label class="form-label">Time Control</label>
+      <select class="form-select" id="tTc">
         <option value="bullet">Bullet (1+0)</option>
         <option value="blitz" selected>Blitz (5+0)</option>
         <option value="rapid">Rapid (10+0)</option>
       </select>
     </div>
     <div class="form-group">
-      <label class="form-label" for="tDuration">Duration</label>
-      <select class="form-select" id="tDuration" name="duration">
+      <label class="form-label">Duration</label>
+      <select class="form-select" id="tDuration">
         <option value="15">15 minutes</option>
         <option value="30" selected>30 minutes</option>
         <option value="60">1 hour</option>
       </select>
     </div>
-    <div class="create-error" id="createError" role="alert" aria-live="polite"></div>
     <div class="modal-actions">
-      <button class="btn-action secondary" id="createCancelBtn" type="button">Cancel</button>
-      <button class="btn-action primary" id="createSubmitBtn" type="submit">Create</button>
+      <button class="btn-action secondary" id="createCancelBtn">Cancel</button>
+      <button class="btn-action primary"   id="createSubmitBtn">Create</button>
     </div>
-  </form>
+  </div>
 </div>
 
 <script src="nav.js"></script>
@@ -406,10 +336,10 @@
 
   const TC_LABELS = { bullet: "Bullet · 1+0", blitz: "Blitz · 5+0", rapid: "Rapid · 10+0" };
   const TC_SECS   = { bullet: 60, blitz: 300, rapid: 600 };
-  const VALID_STATUSES = new Set(["waiting", "active", "finished"]);
-  const SAFE_FIREBASE_KEY = /^[A-Za-z0-9_-]{1,128}$/;
+  const TOURNAMENT_STATUSES = new Set(["waiting", "active", "finished"]);
+  const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-  function escapeHTML(value) {
+  function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, char => ({
       "&": "&amp;",
       "<": "&lt;",
@@ -419,22 +349,23 @@
     })[char]);
   }
 
-  function safeStatus(value) {
-    return VALID_STATUSES.has(value) ? value : "finished";
+  function safeUsername(value) {
+    const username = typeof value === "string" ? value.trim() : "";
+    return username ? username.slice(0, 64) : "Unknown";
   }
 
-  function safeTimeControl(value) {
-    return Object.hasOwn(TC_LABELS, value) ? value : "rapid";
-  }
-
-  function safeNumber(value, fallback = 0) {
+  function safeInteger(value, fallback = 0, min = 0, max = 200000) {
     const number = Number(value);
-    return Number.isFinite(number) ? Math.max(0, Math.trunc(number)) : fallback;
+    if (!Number.isFinite(number)) return fallback;
+    return Math.min(max, Math.max(min, Math.trunc(number)));
   }
 
-  function safeFirebaseKey(value) {
-    const key = String(value ?? "");
-    return SAFE_FIREBASE_KEY.test(key) ? key : null;
+  function normalizeTimeControl(value) {
+    return Object.hasOwn(TC_LABELS, value) ? value : null;
+  }
+
+  function normalizeTournamentStatus(value) {
+    return TOURNAMENT_STATUSES.has(value) ? value : "finished";
   }
 
   let myUid      = null;
@@ -444,8 +375,13 @@
   let detailUnsub      = null;
   let countdownInterval = null;
   let myQueueRef       = null;
+  let myQueueDisconnect = null;
   let isSearching      = false;
   let matchUnsub       = null;
+  let matchAttempt      = null;
+  let searchGeneration  = 0;
+  let creatingGameId    = null;
+  let handlingAssignment = false;
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   onAuthStateChanged(auth, async user => {
@@ -469,29 +405,26 @@
 
       const ORDER = { active: 0, waiting: 1, finished: 2 };
       const items  = Object.entries(data)
-        .map(([id, t]) => ({
-          id,
-          ...(t && typeof t === "object" ? t : {}),
-          status: safeStatus(t?.status),
-        }))
+        .filter(([, t]) => t && typeof t === "object")
+        .map(([id, t]) => ({ id, ...t }))
         .sort((a, b) => (ORDER[a.status] ?? 3) - (ORDER[b.status] ?? 3)
-                     || safeNumber(b.createdAt) - safeNumber(a.createdAt));
+                     || safeInteger(b.createdAt, 0, 0, Number.MAX_SAFE_INTEGER)
+                      - safeInteger(a.createdAt, 0, 0, Number.MAX_SAFE_INTEGER));
 
       listEl.innerHTML = "";
       for (const t of items) {
         const count = t.players ? Object.keys(t.players).length : 0;
-        const duration = safeNumber(t.durationMinutes);
-        const timeControl = safeTimeControl(t.timeControl);
-        const card  = document.createElement("button");
-        card.type = "button";
+        const status = normalizeTournamentStatus(t.status);
+        const tc = normalizeTimeControl(t.timeControl);
+        const duration = safeInteger(t.durationMinutes, 0, 0, 1440);
+        const card  = document.createElement("div");
         card.className  = `t-card${t.id === selectedId ? " selected" : ""}`;
         card.dataset.id = t.id;
-        card.setAttribute("aria-pressed", String(t.id === selectedId));
         card.innerHTML  = `
-          <div class="t-card-name">${escapeHTML(t.name || "Arena")}</div>
+          <div class="t-card-name">${escapeHtml(t.name || "Arena")}</div>
           <div class="t-card-meta">
-            <span class="status-badge ${t.status}">${t.status}</span>
-            <span class="t-card-info">${escapeHTML(TC_LABELS[timeControl])} · ${duration}min · ${safeNumber(count)}p</span>
+            <span class="status-badge ${status}">${status}</span>
+            <span class="t-card-info">${escapeHtml(tc ? TC_LABELS[tc] : "Unknown time control")} · ${duration}min · ${count}p</span>
           </div>
         `;
         card.onclick = () => selectTournament(t.id);
@@ -506,11 +439,8 @@
     if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
 
     selectedId = id;
-    document.querySelectorAll(".t-card").forEach(c => {
-      const selected = c.dataset.id === id;
-      c.classList.toggle("selected", selected);
-      c.setAttribute("aria-pressed", String(selected));
-    });
+    document.querySelectorAll(".t-card").forEach(c =>
+      c.classList.toggle("selected", c.dataset.id === id));
 
     detailUnsub = onValue(ref(db, `tournaments/${id}`), snap => {
       const t = snap.val();
@@ -522,11 +452,14 @@
   function renderDetail(id, t) {
     if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
 
-    const players    = t.players ? Object.entries(t.players).map(([uid, p]) => ({ uid, ...p })) : [];
-    const status     = safeStatus(t.status);
-    const timeControl = safeTimeControl(t.timeControl);
-    const duration   = safeNumber(t.durationMinutes);
-    const endAt      = safeNumber(t.endAt);
+    const players    = t.players ? Object.entries(t.players).map(([uid, p]) => ({
+      uid,
+      ...(p && typeof p === "object" ? p : {}),
+    })) : [];
+    const tournamentStatus = normalizeTournamentStatus(t.status);
+    const timeControl = normalizeTimeControl(t.timeControl);
+    const durationMinutes = safeInteger(t.durationMinutes, 0, 0, 1440);
+    const endAt = safeInteger(t.endAt, 0, 0, Number.MAX_SAFE_INTEGER);
     const isJoined   = players.some(p => p.uid === myUid);
     const isCreator  = t.createdBy === myUid;
     const count      = players.length;
@@ -534,7 +467,7 @@
 
     // ── Actions ──
     let actionsHTML = "";
-    if (status === "waiting") {
+    if (tournamentStatus === "waiting") {
       if (!isJoined) {
         actionsHTML = `<button class="btn-action primary" id="joinBtn">Join</button>`;
       } else if (isCreator) {
@@ -545,7 +478,7 @@
       } else {
         actionsHTML = `<button class="btn-action danger" id="leaveBtn">Leave</button>`;
       }
-    } else if (status === "active") {
+    } else if (tournamentStatus === "active") {
       if (!isJoined) {
         actionsHTML = `<button class="btn-action primary" id="joinBtn">Join</button>`;
       } else if (searching) {
@@ -557,7 +490,7 @@
 
     // ── Countdown ──
     let countdownHTML = "";
-    if (status === "active" && endAt) {
+    if (tournamentStatus === "active" && endAt) {
       countdownHTML = `
         <div class="countdown-bar">
           <span class="countdown-label">Time remaining</span>
@@ -568,41 +501,40 @@
 
     // ── Queue status ──
     let queueHTML = "";
-    if (status === "active" && isJoined) {
-      queueHTML = `<div class="queue-status-bar${searching ? " searching" : ""}" id="arenaQueueStatus" role="status" aria-live="polite">
+    if (tournamentStatus === "active" && isJoined) {
+      queueHTML = `<div class="queue-status-bar${searching ? " searching" : ""}" id="arenaQueueStatus">
         ${searching ? "Searching for opponent..." : 'Click "Find Opponent" to play a game'}
       </div>`;
     }
 
     // ── Body ──
     let bodyHTML = "";
-    if (status === "waiting") {
+    if (tournamentStatus === "waiting") {
       const playerItems = players.map(p => {
-        const username = String(p.username || "Player");
-        const initial = username.trim().charAt(0).toUpperCase() || "?";
+        const username = safeUsername(p.username);
         return `
-        <div class="player-join-item">
-          <div class="player-join-avatar" aria-hidden="true">${escapeHTML(initial)}</div>
-          <span>${escapeHTML(username)}${p.uid === myUid ? `<span class="lb-you">(You)</span>` : ""}${p.uid === t.createdBy ? `<span class="lb-you">creator</span>` : ""}</span>
-        </div>
-      `;
+          <div class="player-join-item">
+            <div class="player-join-avatar">${escapeHtml(username[0].toUpperCase())}</div>
+            <span>${escapeHtml(username)}${p.uid === myUid ? `<span class="lb-you">(You)</span>` : ""}${p.uid === t.createdBy ? `<span class="lb-you">creator</span>` : ""}</span>
+          </div>
+        `;
       }).join("");
       bodyHTML = `
         <div class="section-title">Players (${count})</div>
         <div class="player-join-list">${playerItems || `<div style="color:var(--muted);font-size:13px;padding:8px 0;">No players yet</div>`}</div>
       `;
     } else {
-      bodyHTML = renderLeaderboard(players, status === "active");
+      bodyHTML = renderLeaderboard(players, tournamentStatus === "active");
     }
 
     document.getElementById("detailPanel").innerHTML = `
       <div class="detail-header">
         <div>
-          <h1 class="detail-title">${escapeHTML(t.name || "Arena")}</h1>
+          <div class="detail-title">${escapeHtml(t.name || "Arena")}</div>
           <div class="detail-badges">
-            <span class="status-badge ${status}">${status}</span>
-            <span class="detail-badge">${escapeHTML(TC_LABELS[timeControl])}</span>
-            <span class="detail-badge">${duration} min</span>
+            <span class="status-badge ${tournamentStatus}">${tournamentStatus}</span>
+            <span class="detail-badge">${escapeHtml(timeControl ? TC_LABELS[timeControl] : "Unknown time control")}</span>
+            <span class="detail-badge">${durationMinutes} min</span>
             <span class="detail-badge">${count} player${count !== 1 ? "s" : ""}</span>
           </div>
         </div>
@@ -615,13 +547,16 @@
 
     // Wire buttons
     document.getElementById("joinBtn")?.addEventListener("click", () => joinTournament(id));
-    document.getElementById("leaveBtn")?.addEventListener("click", () => leaveTournament(id));
-    document.getElementById("startBtn")?.addEventListener("click", () => startTournament(id, duration));
+    document.getElementById("leaveBtn")?.addEventListener(
+      "click",
+      () => leaveTournament(id, isCreator),
+    );
+    document.getElementById("startBtn")?.addEventListener("click", () => startTournament(id, durationMinutes));
     document.getElementById("findBtn")?.addEventListener("click", () => findOpponent(id, timeControl));
     document.getElementById("cancelSearchBtn")?.addEventListener("click", () => cancelSearch(id));
 
     // Countdown ticker
-    if (status === "active" && endAt) {
+    if (tournamentStatus === "active" && endAt) {
       const el = document.getElementById("countdownEl");
       const tick = () => {
         const rem = Math.max(0, endAt - Date.now());
@@ -646,31 +581,34 @@
     if (!players.length) return `<div style="color:var(--muted);font-size:13px;padding:16px 0;">No players yet</div>`;
 
     const sorted = [...players].sort((a, b) =>
-      safeNumber(b.score) - safeNumber(a.score) || safeNumber(b.wins) - safeNumber(a.wins));
+      (b.score || 0) - (a.score || 0) || (b.wins || 0) - (a.wins || 0));
 
     const rows = sorted.map((p, i) => {
       const rank      = i + 1;
       const rankClass = rank === 1 ? "gold" : rank === 2 ? "silver" : rank === 3 ? "bronze" : "";
-      const username  = escapeHTML(p.username || "Player");
+      const username  = safeUsername(p.username);
+      const score     = safeInteger(p.score);
+      const wins      = safeInteger(p.wins);
+      const draws     = safeInteger(p.draws);
+      const losses    = safeInteger(p.losses);
+      const games     = safeInteger(p.gamesPlayed);
       return `
         <tr>
           <td class="lb-rank ${rankClass}">#${rank}</td>
-          <td>${username}${p.uid === myUid ? `<span class="lb-you">(You)</span>` : ""}</td>
-          <td class="lb-score">${safeNumber(p.score)}</td>
-          <td class="lb-wdl">${safeNumber(p.wins)}W / ${safeNumber(p.draws)}D / ${safeNumber(p.losses)}L</td>
-          <td class="lb-wdl">${safeNumber(p.gamesPlayed)} games</td>
+          <td>${escapeHtml(username)}${p.uid === myUid ? `<span class="lb-you">(You)</span>` : ""}</td>
+          <td class="lb-score">${score}</td>
+          <td class="lb-wdl">${wins}W / ${draws}D / ${losses}L</td>
+          <td class="lb-wdl">${games} games</td>
         </tr>
       `;
     }).join("");
 
     return `
       <div class="section-title">${live ? "Live Leaderboard" : "Final Standings"}</div>
-      <div class="leaderboard-scroll">
-        <table class="leaderboard" aria-label="${live ? "Live leaderboard" : "Final standings"}">
-          <thead><tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Score</th><th scope="col">W/D/L</th><th scope="col">Games</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
+      <table class="leaderboard">
+        <thead><tr><th>#</th><th>Player</th><th>Score</th><th>W/D/L</th><th>Games</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
     `;
   }
 
@@ -688,19 +626,28 @@
   }
 
   // ── Leave ─────────────────────────────────────────────────────────────────
-  async function leaveTournament(id) {
-    cancelSearch(id);
+  async function leaveTournament(id, isCreator = false) {
+    await cancelSearch(id);
+    if (isCreator) {
+      await remove(ref(db, `tournaments/${id}`));
+      selectedId = null;
+      document.getElementById("detailPanel").innerHTML =
+        `<div class="empty-detail">Select a tournament to view details</div>`;
+      return;
+    }
     await set(ref(db, `tournaments/${id}/players/${myUid}`), null);
   }
 
   // ── Start ─────────────────────────────────────────────────────────────────
   async function startTournament(id, durationMinutes) {
-    const endAt = Date.now() + durationMinutes * 60 * 1000;
-    await Promise.all([
-      set(ref(db, `tournaments/${id}/status`),  "active"),
-      set(ref(db, `tournaments/${id}/startAt`), Date.now()),
-      set(ref(db, `tournaments/${id}/endAt`),   endAt),
-    ]);
+    const duration = safeInteger(durationMinutes, 0, 1, 1440);
+    if (!duration) return;
+    const startAt = Date.now();
+    await update(ref(db, `tournaments/${id}`), {
+      status: "active",
+      startAt,
+      endAt: startAt + duration * 60 * 1000,
+    });
   }
 
   // ── End (countdown expires) ───────────────────────────────────────────────
@@ -710,251 +657,421 @@
   }
 
   // ── Find opponent ─────────────────────────────────────────────────────────
-  async function findOpponent(id, tc) {
-    if (isSearching) return;
-    const tournamentId = safeFirebaseKey(id);
-    const callerUid = safeFirebaseKey(myUid);
-    if (!tournamentId || !callerUid) {
-      setQueueStatus("Unable to start matchmaking. Please refresh and try again.");
-      return;
-    }
-    isSearching = true;
-
-    // Update UI immediately
-    const actions = document.querySelector(".detail-actions");
-    if (actions) {
-      actions.innerHTML = `<button class="btn-action danger" id="cancelSearchBtn">Cancel</button>`;
-      document.getElementById("cancelSearchBtn").addEventListener("click", () => cancelSearch(tournamentId));
-    }
-    setQueueStatus("Searching for opponent...", true);
-
-    try {
-      myQueueRef = ref(db, `tournaments/${tournamentId}/queue/${callerUid}`);
-      await onDisconnect(myQueueRef).remove();
-      await set(myQueueRef, { uid: callerUid, username: String(myUsername || "Player"), joinedAt: Date.now() });
-
-      // Listen before attempting a match so an atomic assignment cannot be missed.
-      matchUnsub = onValue(ref(db, `tournaments/${tournamentId}/matches/${callerUid}`), async snap => {
-        if (!snap.exists()) return;
-        if (matchUnsub) { matchUnsub(); matchUnsub = null; }
-        await set(ref(db, `tournaments/${tournamentId}/matches/${callerUid}`), null).catch(() => {});
-        isSearching = false;
-        window.location.href = `play.html?tournament=${encodeURIComponent(tournamentId)}`;
-      });
-
-      void tryMatch(tournamentId, tc);
-    } catch (error) {
-      console.error("Unable to join the tournament queue", error);
-      await recoverSearchUI(tournamentId, "Unable to start matchmaking. Please try again.");
-    }
+  function queueCore(entry) {
+    return {
+      uid: entry.uid,
+      username: entry.username,
+      joinedAt: entry.joinedAt,
+      tc: entry.tc,
+    };
   }
 
-  async function tryMatch(id, tc) {
-    const tournamentId = safeFirebaseKey(id);
-    const callerUid = safeFirebaseKey(myUid);
-    if (!tournamentId || !callerUid) {
-      await recoverSearchUI(id, "Unable to start matchmaking. Please refresh and try again.");
-      return;
-    }
-
-    let committedMatch = null;
-
-    try {
-      const result = await runTransaction(ref(db, `tournaments/${tournamentId}/queue`), queue => {
-        // Firebase may rerun this callback after a conflict. Keep only the
-        // candidate chosen by the latest transaction attempt.
-        committedMatch = null;
-        if (!queue || typeof queue !== "object") return;
-        if (!Object.prototype.hasOwnProperty.call(queue, callerUid)) return;
-
-        const ownEntry = queue[callerUid];
-        if (!ownEntry || typeof ownEntry !== "object" || safeFirebaseKey(ownEntry.uid) !== callerUid) return;
-
-        const entries = Object.entries(queue)
-          .map(([key, entry]) => ({ uid: safeFirebaseKey(key), entry }))
-          .filter(candidate =>
-            candidate.uid
-            && candidate.uid !== callerUid
-            && candidate.entry
-            && typeof candidate.entry === "object"
-            && safeFirebaseKey(candidate.entry.uid) === candidate.uid);
-        if (entries.length === 0) return queue;
-        entries.sort((a, b) =>
-          safeNumber(a.entry.joinedAt) - safeNumber(b.entry.joinedAt));
-
-        const attemptMatch = entries[0];
-        committedMatch = {
-          uid: attemptMatch.uid,
-          username: String(attemptMatch.entry.username || "Player"),
-        };
-        const nextQueue = { ...queue };
-        delete nextQueue[callerUid];
-        delete nextQueue[committedMatch.uid];
-        return nextQueue;
-      }, { applyLocally: false });
-
-      if (!result.committed || !committedMatch) return;
-
-      try {
-        await createTournamentGame(
-          tournamentId,
-          safeTimeControl(tc),
-          callerUid,
-          myUsername,
-          committedMatch.uid,
-          committedMatch.username,
-        );
-      } catch (error) {
-        console.error("Unable to create tournament game", error);
-        const requeued = await requeuePlayers(tournamentId, [
-          { uid: callerUid, username: myUsername },
-          committedMatch,
-        ]);
-        if (requeued) {
-          setQueueStatus("Match setup failed. You are still queued.", true);
-        } else {
-          await recoverSearchUI(tournamentId, "Match setup failed. Please try again.");
-        }
-      }
-    } catch (error) {
-      console.error("Tournament queue transaction failed", error);
-      await recoverSearchUI(tournamentId, "Matchmaking was interrupted. Please try again.");
-    }
+  function openQueueEntry(entry) {
+    return { ...queueCore(entry), state: "open" };
   }
 
-  async function createTournamentGame(tournamentId, tc, whiteUid, whiteUsername, blackUid, blackUsername) {
-    const safeTournamentId = safeFirebaseKey(tournamentId);
-    const safeWhiteUid = safeFirebaseKey(whiteUid);
-    const safeBlackUid = safeFirebaseKey(blackUid);
-    if (!safeTournamentId || !safeWhiteUid || !safeBlackUid || safeWhiteUid === safeBlackUid) {
-      throw new Error("invalid_match_participant");
-    }
-
-    const gameRef = push(ref(db, "games"));
-    const gameId  = safeFirebaseKey(gameRef.key);
-    if (!gameId) throw new Error("invalid_game_id");
-    const secs    = TC_SECS[tc] ?? 600;
-    const createdAt = Date.now();
-    const clockMs = secs * 1000;
-
-    await update(ref(db), {
-      [`games/${gameId}`]: {
-        white:        { uid: safeWhiteUid, username: String(whiteUsername || "Player") },
-        black:        { uid: safeBlackUid, username: String(blackUsername || "Player") },
-        fen:          "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        moves:        [],
-        status:       "playing",
-        timeControl:  safeTimeControl(tc),
-        whiteTime:    secs,
-        blackTime:    secs,
-        whiteTimeMs:  clockMs,
-        blackTimeMs:  clockMs,
-        activeColor:  "white",
-        clockUpdatedAt: createdAt,
-        createdAt,
-        tournamentId: safeTournamentId,
-      },
-      [`users/${safeWhiteUid}/currentGame`]: gameId,
-      [`users/${safeBlackUid}/currentGame`]: gameId,
-      [`tournaments/${safeTournamentId}/matches/${safeWhiteUid}`]: gameId,
-      [`tournaments/${safeTournamentId}/matches/${safeBlackUid}`]: gameId,
-    });
+  function hasExactKeys(value, expectedKeys) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const actual = Object.keys(value).sort();
+    const expected = [...expectedKeys].sort();
+    return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
   }
 
-  async function requeuePlayers(tournamentId, players) {
-    const safeTournamentId = safeFirebaseKey(tournamentId);
-    if (!safeTournamentId) return false;
-
-    const joinedAt = Date.now();
-    const rootUpdates = {};
-    for (const player of players) {
-      const uid = safeFirebaseKey(player?.uid);
-      if (!uid) return false;
-      rootUpdates[`tournaments/${safeTournamentId}/queue/${uid}`] = {
-        uid,
-        username: String(player.username || "Player"),
-        joinedAt,
-      };
-    }
-
-    try {
-      await update(ref(db), rootUpdates);
-      return true;
-    } catch {
-      return false;
-    }
+  function isOpenQueueEntry(value, uid, tc) {
+    return hasExactKeys(value, ["uid", "username", "joinedAt", "tc", "state"])
+      && value.uid === uid
+      && typeof value.username === "string"
+      && Number.isFinite(value.joinedAt)
+      && value.tc === tc
+      && value.state === "open";
   }
 
-  function setQueueStatus(message, searching = false) {
+  function isFreshQueueTimestamp(value, referenceTime = Date.now()) {
+    return Number.isFinite(value)
+      && value >= referenceTime - 300000
+      && value <= referenceTime + 300000;
+  }
+
+  function sameQueueEntry(current, expected) {
+    if (!current || !expected || typeof current !== "object" || typeof expected !== "object") return false;
+    const currentKeys = Object.keys(current).sort();
+    const expectedKeys = Object.keys(expected).sort();
+    return currentKeys.length === expectedKeys.length
+      && currentKeys.every((key, index) =>
+        key === expectedKeys[index] && current[key] === expected[key]);
+  }
+
+  async function transitionQueueEntry(entryRef, expected, nextValue) {
+    const result = await runTransaction(entryRef, current =>
+      sameQueueEntry(current, expected) ? nextValue : undefined, { applyLocally: false });
+    return result.committed;
+  }
+
+  function candidatePrecedesMe(candidate, mine) {
+    return candidate.joinedAt < mine.joinedAt
+      || (candidate.joinedAt === mine.joinedAt && candidate.uid < mine.uid);
+  }
+
+  function setQueueStatus(message, searching = true) {
     const status = document.getElementById("arenaQueueStatus");
     if (!status) return;
     status.textContent = message;
     status.className = `queue-status-bar${searching ? " searching" : ""}`;
   }
 
-  async function recoverSearchUI(id, message) {
-    isSearching = false;
-    const queueRef = myQueueRef;
-    myQueueRef = null;
-    if (queueRef) await remove(queueRef).catch(() => {});
-    if (matchUnsub) { matchUnsub(); matchUnsub = null; }
+  async function cancelQueueDisconnect() {
+    const registration = myQueueDisconnect;
+    myQueueDisconnect = null;
+    if (!registration) return;
+    try {
+      await registration.cancel();
+    } catch (error) {
+      console.warn("Could not cancel queue disconnect cleanup", error);
+    }
+  }
 
-    const tournamentId = safeFirebaseKey(id);
-    if (!tournamentId) return;
-    const snap = await get(ref(db, `tournaments/${tournamentId}`)).catch(() => null);
-    if (snap?.val()) renderDetail(tournamentId, snap.val());
-    setQueueStatus(message);
+  function listenForTournamentMatch(tournamentId) {
+    if (matchUnsub) matchUnsub();
+    matchUnsub = onValue(ref(db, `tournaments/${tournamentId}/matches/${myUid}`), snap => {
+      const gameId = snap.val();
+      if (typeof gameId !== "string" || !/^[A-Za-z0-9_-]{8,128}$/.test(gameId)) return;
+      if (creatingGameId === gameId) return;
+      void handleAssignedMatch(tournamentId, gameId);
+    });
+  }
+
+  async function handleAssignedMatch(tournamentId, gameId) {
+    if (handlingAssignment) return;
+    handlingAssignment = true;
+    let shouldNavigate = false;
+    try {
+      const currentGameSnap = await get(ref(db, `users/${myUid}/currentGame`));
+      if (currentGameSnap.val() !== gameId) {
+        await set(ref(db, `tournaments/${tournamentId}/matches/${myUid}`), null);
+        return;
+      }
+
+      searchGeneration += 1;
+      isSearching = false;
+      await cancelQueueDisconnect();
+      if (myQueueRef) {
+        await runTransaction(myQueueRef, current => {
+          if (!current || current.uid !== myUid || current.gameId !== gameId) return;
+          return null;
+        }, { applyLocally: false });
+      }
+      await set(ref(db, `tournaments/${tournamentId}/matches/${myUid}`), null);
+      shouldNavigate = true;
+    } catch (error) {
+      console.warn("Matched, but local queue cleanup was incomplete", error);
+    } finally {
+      handlingAssignment = false;
+      if (shouldNavigate) {
+        myQueueRef = null;
+        if (matchUnsub) { matchUnsub(); matchUnsub = null; }
+        window.location.href = `play.html?tournament=${encodeURIComponent(tournamentId)}`;
+      }
+    }
+  }
+
+  async function findOpponent(id, rawTimeControl) {
+    if (isSearching) return;
+    const tc = normalizeTimeControl(rawTimeControl);
+    if (!tc || !myUid || typeof myUsername !== "string") return;
+
+    const generation = ++searchGeneration;
+    const myEntry = {
+      uid: myUid,
+      username: myUsername,
+      joinedAt: Date.now(),
+      tc,
+      state: "open",
+    };
+    isSearching = true;
+
+    const actions = document.querySelector(".detail-actions");
+    if (actions) {
+      actions.innerHTML = `<button class="btn-action danger" id="cancelSearchBtn">Cancel</button>`;
+      document.getElementById("cancelSearchBtn").addEventListener("click", () => void cancelSearch(id));
+    }
+    setQueueStatus("Searching for opponent...");
+
+    myQueueRef = ref(db, `tournaments/${id}/queue/${myUid}`);
+    let attempt = null;
+    try {
+      myQueueDisconnect = onDisconnect(myQueueRef);
+      await myQueueDisconnect.remove();
+      await runTransaction(myQueueRef, current => {
+        if (!current) return null;
+        return current.uid === myUid ? null : undefined;
+      }, { applyLocally: false });
+      await set(myQueueRef, myEntry);
+      if (generation !== searchGeneration) {
+        await transitionQueueEntry(myQueueRef, myEntry, null);
+        return;
+      }
+
+      listenForTournamentMatch(id);
+      attempt = tryMatch(id, tc, myEntry, generation);
+      matchAttempt = attempt;
+      await attempt;
+    } catch (error) {
+      console.error("Tournament matchmaking failed", error);
+      if (generation === searchGeneration) {
+        searchGeneration += 1;
+        isSearching = false;
+        await cancelQueueDisconnect();
+        if (myQueueRef) {
+          try {
+            await transitionQueueEntry(myQueueRef, myEntry, null);
+          } catch (cleanupError) {
+            console.warn("Could not roll back open queue entry", cleanupError);
+          }
+        }
+        if (matchUnsub) { matchUnsub(); matchUnsub = null; }
+        setQueueStatus("Matchmaking failed. Try again.", false);
+      }
+    } finally {
+      if (matchAttempt === attempt) matchAttempt = null;
+    }
+  }
+
+  async function rollbackClaim(targetRef, targetClaim, callerRef, callerClaim) {
+    try {
+      await transitionQueueEntry(targetRef, targetClaim, openQueueEntry(targetClaim));
+    } catch (error) {
+      console.warn("Could not roll back target queue claim", error);
+    }
+    try {
+      await transitionQueueEntry(callerRef, callerClaim, openQueueEntry(callerClaim));
+    } catch (error) {
+      console.warn("Could not roll back caller queue claim", error);
+    }
+  }
+
+  async function tryMatch(tournamentId, tc, myEntry, generation) {
+    const queueSnap = await get(ref(db, `tournaments/${tournamentId}/queue`));
+    const queue = queueSnap.val() || {};
+    const queueWindowNow = Date.now();
+    if (!isFreshQueueTimestamp(myEntry.joinedAt, queueWindowNow)) return false;
+    const candidates = Object.entries(queue)
+      .filter(([uid, entry]) =>
+        uid !== myUid
+        && isOpenQueueEntry(entry, uid, tc)
+        && isFreshQueueTimestamp(entry.joinedAt, queueWindowNow)
+        && candidatePrecedesMe(entry, myEntry))
+      .map(([uid, entry]) => ({ uid, entry }))
+      .sort((a, b) =>
+        a.entry.joinedAt - b.entry.joinedAt
+        || (a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0));
+
+    for (const candidate of candidates) {
+      if (generation !== searchGeneration) return false;
+
+      const gameRef = push(ref(db, "games"));
+      const gameId = gameRef.key;
+      const callerClaim = {
+        ...queueCore(myEntry),
+        state: "claiming",
+        peerUid: candidate.uid,
+        gameId,
+        stateAt: Date.now(),
+      };
+      const callerClaimed = await transitionQueueEntry(myQueueRef, myEntry, callerClaim);
+      if (!callerClaimed) return false;
+
+      if (generation !== searchGeneration) {
+        try {
+          await transitionQueueEntry(myQueueRef, callerClaim, myEntry);
+        } catch (error) {
+          console.warn("Could not cancel caller queue claim", error);
+        }
+        return false;
+      }
+
+      const targetRef = ref(db, `tournaments/${tournamentId}/queue/${candidate.uid}`);
+      const targetClaim = {
+        ...queueCore(candidate.entry),
+        state: "claimed",
+        peerUid: myUid,
+        gameId,
+        stateAt: Date.now(),
+      };
+      let targetClaimed = false;
+      try {
+        targetClaimed = await transitionQueueEntry(targetRef, candidate.entry, targetClaim);
+      } catch (error) {
+        try {
+          await transitionQueueEntry(myQueueRef, callerClaim, myEntry);
+        } catch (rollbackError) {
+          console.warn("Could not restore caller after target claim error", rollbackError);
+        }
+        throw error;
+      }
+      if (!targetClaimed) {
+        const callerRestored = await transitionQueueEntry(myQueueRef, callerClaim, myEntry);
+        if (!callerRestored) return false;
+        continue;
+      }
+
+      if (generation !== searchGeneration) {
+        await rollbackClaim(targetRef, targetClaim, myQueueRef, callerClaim);
+        return false;
+      }
+
+      creatingGameId = gameId;
+      try {
+        await createTournamentGame(
+          tournamentId,
+          tc,
+          gameRef,
+          myEntry,
+          candidate.entry,
+          myQueueRef,
+          callerClaim,
+          targetRef,
+          targetClaim,
+        );
+        return true;
+      } catch (error) {
+        await rollbackClaim(targetRef, targetClaim, myQueueRef, callerClaim);
+        throw error;
+      } finally {
+        creatingGameId = null;
+      }
+    }
+    return false;
+  }
+
+  async function createTournamentGame(
+    tournamentId,
+    tc,
+    gameRef,
+    whiteEntry,
+    blackEntry,
+    callerRef,
+    callerClaim,
+    targetRef,
+    targetClaim,
+  ) {
+    const gameId = gameRef.key;
+    const secs = TC_SECS[tc];
+    let gameWritten = false;
+    let assignmentsWritten = false;
+
+    try {
+      await set(gameRef, {
+        schemaVersion: 2,
+        kind: "tournament",
+        white: { uid: whiteEntry.uid, username: whiteEntry.username },
+        black: { uid: blackEntry.uid, username: blackEntry.username },
+        status: "playing",
+        timeControl: tc,
+        createdAt: Date.now(),
+        createdBy: whiteEntry.uid,
+        tournamentId,
+        position: {
+          ply: 0,
+          turnUid: whiteEntry.uid,
+          fen: START_FEN,
+        },
+        clocks: {
+          white: secs,
+          black: secs,
+        },
+      });
+      gameWritten = true;
+
+      await update(ref(db), {
+        [`users/${whiteEntry.uid}/currentGame`]: gameId,
+        [`users/${blackEntry.uid}/currentGame`]: gameId,
+        [`tournaments/${tournamentId}/matches/${whiteEntry.uid}`]: gameId,
+        [`tournaments/${tournamentId}/matches/${blackEntry.uid}`]: gameId,
+      });
+      assignmentsWritten = true;
+    } catch (error) {
+      if (gameWritten && !assignmentsWritten) {
+        try {
+          await remove(gameRef);
+        } catch (rollbackError) {
+          console.error("Could not remove an unassigned tournament game", rollbackError);
+        }
+      }
+      throw error;
+    }
+
+    try {
+      await transitionQueueEntry(targetRef, targetClaim, null);
+      await transitionQueueEntry(callerRef, callerClaim, null);
+    } catch (error) {
+      console.warn("Game created, but queue cleanup was incomplete", error);
+    }
+
+    searchGeneration += 1;
+    isSearching = false;
+    await cancelQueueDisconnect();
+    if (matchUnsub) { matchUnsub(); matchUnsub = null; }
+    try {
+      await set(ref(db, `tournaments/${tournamentId}/matches/${whiteEntry.uid}`), null);
+    } catch (error) {
+      console.warn("Could not clear local match notification", error);
+    }
+    myQueueRef = null;
+    window.location.href = `play.html?tournament=${encodeURIComponent(tournamentId)}`;
   }
 
   // ── Cancel search ─────────────────────────────────────────────────────────
-  function cancelSearch(id) {
+  async function cancelSearch(id) {
+    searchGeneration += 1;
     isSearching = false;
-    if (myQueueRef) { remove(myQueueRef); myQueueRef = null; }
+    const pendingAttempt = matchAttempt;
+    matchAttempt = null;
+    if (pendingAttempt) {
+      try {
+        await pendingAttempt;
+      } catch (error) {
+        console.warn("Match attempt ended during cancellation", error);
+      }
+    }
+
+    await cancelQueueDisconnect();
+    if (myQueueRef) {
+      try {
+        await runTransaction(myQueueRef, current => {
+          if (!current || current.uid !== myUid) return;
+          return null;
+        }, { applyLocally: false });
+      } catch (error) {
+        console.warn("Could not remove own queue entry", error);
+      }
+      myQueueRef = null;
+    }
     if (matchUnsub) { matchUnsub(); matchUnsub = null; }
-    // Refresh detail
-    get(ref(db, `tournaments/${id}`)).then(snap => { if (snap.val()) renderDetail(id, snap.val()); });
+
+    try {
+      const snap = await get(ref(db, `tournaments/${id}`));
+      if (snap.val()) renderDetail(id, snap.val());
+    } catch (error) {
+      console.warn("Could not refresh tournament detail", error);
+    }
   }
 
   // ── Create modal ──────────────────────────────────────────────────────────
-  const createBtn = document.getElementById("createBtn");
-  const createModal = document.getElementById("createModal");
-  const createForm = document.getElementById("createForm");
+  document.getElementById("createBtn").onclick = () =>
+    document.getElementById("createModal").classList.remove("hidden");
 
-  function openCreateModal() {
-    document.getElementById("createError").textContent = "";
-    createModal.classList.remove("hidden");
-    createModal.setAttribute("aria-hidden", "false");
-    requestAnimationFrame(() => document.getElementById("tName").focus());
-  }
+  document.getElementById("createCancelBtn").onclick = () =>
+    document.getElementById("createModal").classList.add("hidden");
 
-  function closeCreateModal() {
-    createModal.classList.add("hidden");
-    createModal.setAttribute("aria-hidden", "true");
-    createBtn.focus();
-  }
+  document.getElementById("createModal").onclick = e => {
+    if (e.target === e.currentTarget) document.getElementById("createModal").classList.add("hidden");
+  };
 
-  createBtn.addEventListener("click", openCreateModal);
-  document.getElementById("createCancelBtn").addEventListener("click", closeCreateModal);
-
-  createModal.addEventListener("click", event => {
-    if (event.target === event.currentTarget) closeCreateModal();
-  });
-
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && !createModal.classList.contains("hidden")) {
-      event.preventDefault();
-      closeCreateModal();
-    }
-  });
-
-  createForm.addEventListener("submit", async event => {
-    event.preventDefault();
+  document.getElementById("createSubmitBtn").onclick = async () => {
     const name     = document.getElementById("tName").value.trim();
-    const tc       = safeTimeControl(document.getElementById("tTc").value);
-    const duration = safeNumber(document.getElementById("tDuration").value, 30) || 30;
-    const errorEl = document.getElementById("createError");
-    errorEl.textContent = "";
-    if (!name) {
+    const tc       = normalizeTimeControl(document.getElementById("tTc").value);
+    const duration = safeInteger(document.getElementById("tDuration").value, 0, 1, 1440);
+    if (!name || name.length > 80 || !tc || !duration) {
       document.getElementById("tName").focus();
       return;
     }
@@ -963,50 +1080,40 @@
     btn.disabled    = true;
     btn.textContent = "Creating...";
 
-    try {
-      const tRef = push(ref(db, "tournaments"));
-      const tournamentId = safeFirebaseKey(tRef.key);
-      const creatorUid = safeFirebaseKey(myUid);
-      if (!tournamentId || !creatorUid) throw new Error("invalid_tournament_owner");
-      const createdAt = Date.now();
-      const creatorUsername = String(myUsername || "Player");
+    const tRef = push(ref(db, "tournaments"));
+    const createdAt = Date.now();
+    const creatorPlayer = {
+      username:    myUsername,
+      score:       0,
+      wins:        0,
+      draws:       0,
+      losses:      0,
+      gamesPlayed: 0,
+      joinedAt:    createdAt,
+    };
 
-      await update(ref(db), {
-        [`tournaments/${tournamentId}`]: {
-          name,
-          timeControl:     tc,
-          durationMinutes: duration,
-          status:          "waiting",
-          createdBy:       creatorUid,
-          creatorUsername,
-          createdAt,
-          startAt:         null,
-          endAt:           null,
-          players: {
-            [creatorUid]: {
-              username:    creatorUsername,
-              score:       0,
-              wins:        0,
-              draws:       0,
-              losses:      0,
-              gamesPlayed: 0,
-              joinedAt:    createdAt,
-            },
-          },
-        },
+    try {
+      await update(tRef, {
+        name,
+        timeControl:     tc,
+        durationMinutes: duration,
+        status:          "waiting",
+        createdBy:       myUid,
+        creatorUsername: myUsername,
+        createdAt,
+        [`players/${myUid}`]: creatorPlayer,
       });
 
+      document.getElementById("createModal").classList.add("hidden");
       document.getElementById("tName").value = "";
-      closeCreateModal();
-      selectTournament(tournamentId);
+      selectTournament(tRef.key);
     } catch (error) {
-      console.error("Unable to create tournament", error);
-      errorEl.textContent = "Could not create the tournament. Please try again.";
+      console.error("Could not create tournament", error);
     } finally {
       btn.disabled    = false;
       btn.textContent = "Create";
     }
-  });
+  };
 </script>
 </body>
 </html>

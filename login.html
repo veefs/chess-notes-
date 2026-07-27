@@ -13,21 +13,21 @@
 
 <main>
   <div class="auth-wrap">
-    <form class="auth-box" id="loginForm" aria-labelledby="loginTitle">
-      <h2 class="auth-title" id="loginTitle">Welcome back</h2>
+    <div class="auth-box">
+      <h2 class="auth-title">Welcome back</h2>
       <p class="auth-sub">Log in to your FaithChess account</p>
       <div class="auth-field">
-        <label for="emailInput">Email</label>
-        <input type="email" id="emailInput" name="email" placeholder="you@example.com" autocomplete="username" required />
+        <label>Email</label>
+        <input type="email" id="emailInput" placeholder="you@example.com" />
       </div>
       <div class="auth-field">
-        <label for="passwordInput">Password</label>
-        <input type="password" id="passwordInput" name="password" placeholder="••••••••" autocomplete="current-password" required />
+        <label>Password</label>
+        <input type="password" id="passwordInput" placeholder="••••••••" />
       </div>
-      <div id="authError" class="auth-error hidden" role="alert" aria-live="polite"></div>
-      <button class="auth-btn" id="loginBtn" type="submit">Log In</button>
+      <div id="authError" class="auth-error hidden"></div>
+      <button class="auth-btn" id="loginBtn">Log In</button>
       <p class="auth-switch">Don't have an account? <a href="signup.html">Sign Up</a></p>
-    </form>
+    </div>
   </div>
 </main>
 
@@ -49,8 +49,7 @@
 
   const auth = getAuth(app);
 
-  document.getElementById("loginForm").addEventListener("submit", async event => {
-    event.preventDefault();
+  document.getElementById("loginBtn").onclick = async () => {
     const email = document.getElementById("emailInput").value.trim();
     const password = document.getElementById("passwordInput").value;
     const errEl = document.getElementById("authError");
@@ -62,7 +61,7 @@
       errEl.textContent = friendlyError(err.code);
       errEl.classList.remove("hidden");
     }
-  });
+  };
 
   function friendlyError(code) {
     if (code === "auth/user-not-found") return "No account with that email.";

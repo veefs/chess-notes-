@@ -1,189 +1,153 @@
-"use strict";
-
 const boardEl = document.getElementById("board");
+
 if (!boardEl) {
-  throw new Error("No #board element found");
+  alert("❌ Missing #board element");
+  throw new Error("No board element found");
 }
 
-const liveSettings = window.getSettings ? window.getSettings() : {};
-const livePieceTheme = window.resolvePieceTheme
-  ? window.resolvePieceTheme(liveSettings.pieceSet)
-  : "pieces/cburnett/{piece}.svg";
-
 const game = new Chess();
+
 const board = Chessboard("board", {
   position: "start",
   draggable: false,
-  pieceTheme: livePieceTheme,
+  pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
 });
 
+
+
+console.log("♟ Board ready");
+
+const whiteNameEl = document.getElementById("white-name");
+const blackNameEl = document.getElementById("black-name");
 const movesEl = document.getElementById("moves");
+
 let lastGameId = "";
 let lastMovesLength = 0;
-let pollGeneration = 0;
-let pendingRefreshes = 0;
-let pollLoopPromise = null;
-const REQUEST_TIMEOUT_MS = 8000;
-
-async function fetchChecked(url, responseType) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      headers: responseType === "text"
-        ? { Accept: "application/x-chess-pgn, text/plain;q=0.9" }
-        : { Accept: "application/json" },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      throw new Error(`Lichess returned HTTP ${response.status}.`);
-    }
-    return responseType === "text" ? await response.text() : await response.json();
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
 
 async function getTVGameId() {
-  const data = await fetchChecked("https://lichess.org/api/tv/channels", "json");
-  const gameId = data?.bullet?.gameId;
-  return typeof gameId === "string" && gameId ? gameId : null;
+  try {
+    const res = await fetch("https://lichess.org/api/tv/channels");
+    const data = await res.json();
+
+    const gameId =
+      data?.bullet?.gameId;
+
+    console.log("📺 current TV game:", gameId);
+
+    return gameId;
+  } catch (e) {
+    console.log("❌ TV fetch failed:", e);
+    return null;
+  }
 }
 
 async function fetchPGN(gameId) {
-  return fetchChecked(
-    `https://lichess.org/game/export/${encodeURIComponent(gameId)}`,
-    "text",
-  );
-}
-
-function readPgnTag(pgn, tag) {
-  const match = pgn.match(new RegExp(`^\\[${tag} "([^"]*)"\\]\\r?$`, "m"));
-  return match ? match[1].slice(0, 80) : "";
-}
-
-function formatPlayer(pgn, color) {
-  const name = readPgnTag(pgn, color) || color;
-  const title = readPgnTag(pgn, `${color}Title`);
-  const rating = readPgnTag(pgn, `${color}Elo`);
-  return [title, name, rating ? `(${rating})` : ""].filter(Boolean).join(" ");
+  try {
+    const res = await fetch(`https://lichess.org/game/export/${gameId}`);
+    return await res.text();
+  } catch (e) {
+    console.log("❌ PGN fetch failed:", e);
+    return null;
+  }
 }
 
 function parsePlayers(pgn) {
+  const whiteMatch = pgn.match(/\[White "([^"]+)"\]/);
+  const blackMatch = pgn.match(/\[Black "([^"]+)"\]/);
+
+  const whiteElo = pgn.match(/\[WhiteElo "([^"]+)"\]/);
+  const blackElo = pgn.match(/\[BlackElo "([^"]+)"\]/);
+
+  const whiteTitle = pgn.match(/\[WhiteTitle "([^"]+)"\]/);
+  const blackTitle = pgn.match(/\[BlackTitle "([^"]+)"\]/);
+
+  const whiteName = whiteMatch ? whiteMatch[1] : "White";
+  const blackName = blackMatch ? blackMatch[1] : "Black";
+
+  const wTitle = whiteTitle ? `<span class="title">${whiteTitle[1]}</span>` : "";
+  const bTitle = blackTitle ? `<span class="title">${blackTitle[1]}</span>` : "";
+
+  const wRating = whiteElo ? `<span class="rating">(${whiteElo[1]})</span>` : "";
+  const bRating = blackElo ? `<span class="rating">(${blackElo[1]})</span>` : "";
+
   const whiteBar = document.getElementById("white-bar");
   const blackBar = document.getElementById("black-bar");
-  if (whiteBar) whiteBar.textContent = formatPlayer(pgn, "White");
-  if (blackBar) blackBar.textContent = formatPlayer(pgn, "Black");
+
+  if (whiteBar) {
+    whiteBar.innerHTML = `${wTitle}${whiteName} ${wRating}`;
+  }
+
+  if (blackBar) {
+    blackBar.innerHTML = `${bTitle}${blackName} ${bRating}`;
+  }
 }
 
 function clearHighlights() {
-  document
-    .querySelectorAll(".highlight-square")
-    .forEach((element) => element.classList.remove("highlight-square"));
+  document.querySelectorAll(".highlight-square")
+    .forEach(el => el.classList.remove("highlight-square"));
 }
 
 function highlightSquare(square) {
-  const element = document.querySelector(`.square-${square}`);
-  if (element) element.classList.add("highlight-square");
-}
-
-function parseMoveTokens(pgn) {
-  const moveText = pgn.split(/\r?\n\r?\n/).slice(1).join(" ");
-  if (!moveText) return [];
-
-  return moveText
-    .replace(/\{[^}]*\}/g, " ")
-    .replace(/\([^)]*\)/g, " ")
-    .replace(/\$\d+/g, " ")
-    .replace(/\d+\.(?:\.\.)?/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter((token) => token && !/^(?:1-0|0-1|1\/2-1\/2|\*)$/.test(token));
+  const el = document.querySelector(`.square-${square}`);
+  if (el) el.classList.add("highlight-square");
 }
 
 function applyMoves(pgn) {
-  const moves = parseMoveTokens(pgn);
-  let appliedLength = lastMovesLength;
+  if (!pgn) return;
 
-  for (let index = lastMovesLength; index < moves.length; index++) {
-    const move = game.move(moves[index]);
-    if (!move) {
-      console.warn("Lichess PGN contained an unapplied move; waiting for a fresh export.");
-      break;
-    }
+  const moveText = pgn.split("\n\n")[1];
+  if (!moveText) return;
 
-    appliedLength = index + 1;
+  const moves = moveText
+    .replace(/\{[^}]*\}/g, "")
+    .replace(/\d+\./g, "")
+    .trim()
+    .split(/\s+/);
+
+  for (let i = lastMovesLength; i < moves.length; i++) {
+  const san = moves[i];
+  const move = game.move(san);
+
+  if (move) {
+    console.log("♟ move:", san);
+
     board.position(game.fen());
+
     clearHighlights();
+
     highlightSquare(move.from);
     highlightSquare(move.to);
   }
-
-  lastMovesLength = appliedLength;
-  if (movesEl) movesEl.textContent = moves.join(" ");
 }
 
-async function performUpdate(generation) {
-  try {
-    const gameId = await getTVGameId();
-    if (generation !== pollGeneration || !gameId) return;
+  lastMovesLength = moves.length;
 
-    const pgn = await fetchPGN(gameId);
-    if (generation !== pollGeneration || !pgn) return;
-
-    if (gameId !== lastGameId) {
-      lastGameId = gameId;
-      game.reset();
-      board.position("start");
-      lastMovesLength = 0;
-    }
-
-    parsePlayers(pgn);
-    applyMoves(pgn);
-  } catch (error) {
-    if (generation === pollGeneration) {
-      console.warn("Live board refresh failed; the previous position was preserved.", error);
-    }
+  // update move list UI
+  if (movesEl) {
+    movesEl.textContent = moves.join(" ");
   }
 }
 
-async function drainUpdates() {
-  try {
-    while (pendingRefreshes > 0) {
-      pendingRefreshes = 0;
-      const generation = ++pollGeneration;
-      await performUpdate(generation);
-    }
-  } finally {
-    pollLoopPromise = null;
+async function update() {
+  const gameId = await getTVGameId();
+  if (!gameId) return;
+
+  // new game detected
+  if (gameId !== lastGameId) {
+    console.log("🔥 NEW GAME:", gameId);
+
+    lastGameId = gameId;
+    game.reset();
+    board.position("start");
+    lastMovesLength = 0;
   }
+
+  const pgn = await fetchPGN(gameId);
+  if (!pgn) return;
+
+  parsePlayers(pgn);
+  applyMoves(pgn);
 }
 
-function requestUpdate() {
-  pendingRefreshes++;
-  if (!pollLoopPromise) pollLoopPromise = drainUpdates();
-  return pollLoopPromise;
-}
-
-if (!window.__FAITHCHESS_TEST__) {
-  void requestUpdate();
-  setInterval(() => {
-    void requestUpdate();
-  }, 3000);
-}
-
-if (window.__FAITHCHESS_TEST__) {
-  window.__faithChessLiveTest = Object.freeze({
-    parsePlayers,
-    parseMoveTokens,
-    requestUpdate,
-    getState: () => ({
-      lastGameId,
-      lastMovesLength,
-      pollGeneration,
-      pendingRefreshes,
-      pieceTheme: livePieceTheme,
-    }),
-  });
-}
+update();
+setInterval(update, 3000);

@@ -3,7 +3,11 @@
 !.env.example
 *.log
 node_modules/
+.firebase/
+firebase-backups/
+*.firebase-backup.json
 .playwright/
 .playwright-cli/
+.codex-runs/
 .DS_Store
 Thumbs.db
